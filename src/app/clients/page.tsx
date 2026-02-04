@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
-import { deleteClient, updateClientEmail } from "@/lib/actions";
+import { createClient, deleteClient, updateClientEmail } from "@/lib/actions";
 import { ConfirmButton } from "@/components/confirm-button";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +25,44 @@ export default async function ClientsPage() {
           Keep client contact emails up to date.
         </p>
       </div>
+
+      <form action={createClient} className="card p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Add client</h2>
+          <p className="text-xs text-slate-500">
+            Create a client profile to avoid duplicates when adding invoices.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="new-client-name">
+              Client name
+            </label>
+            <input
+              id="new-client-name"
+              name="name"
+              className="input mt-1"
+              required
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="new-client-email">
+              Client email
+            </label>
+            <input
+              id="new-client-email"
+              type="email"
+              name="email"
+              className="input mt-1"
+              required
+            />
+          </div>
+        </div>
+        <button className="button" type="submit">
+          Add client
+        </button>
+      </form>
+
       <div className="card p-6">
         {clients && clients.length > 0 ? (
           <div className="space-y-4">

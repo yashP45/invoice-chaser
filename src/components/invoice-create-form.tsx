@@ -17,6 +17,13 @@ const STATUS_OPTIONS = [
   { value: "void", label: "Void" }
 ];
 
+type LineItem = {
+  description: string;
+  quantity: string;
+  unit_price: string;
+  line_total: string;
+};
+
 export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
   const { addToast } = useToast();
   const router = useRouter();
@@ -31,11 +38,37 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
     due_date: "",
     status: "open"
   });
+  const [aiMeta, setAiMeta] = useState<{
+    ai_extracted: boolean;
+    ai_confidence: number | null;
+    source_file_path: string | null;
+    subtotal: string;
+    tax: string;
+    total: string;
+    payment_terms: string;
+    bill_to_address: string;
+  }>({
+    ai_extracted: false,
+    ai_confidence: null,
+    source_file_path: null,
+    subtotal: "",
+    tax: "",
+    total: "",
+    payment_terms: "",
+    bill_to_address: ""
+  });
+  const [lineItems, setLineItems] = useState<LineItem[]>([
+    { description: "", quantity: "", unit_price: "", line_total: "" }
+  ]);
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
 
   const clientMap = useMemo(() => {
     return new Map(clients.map((client) => [client.id, client]));
+  }, [clients]);
+
+  const clientByEmail = useMemo(() => {
+    return new Map(clients.map((client) => [client.email.toLowerCase(), client]));
   }, [clients]);
 
   const updateField = (key: string, value: string) => {
@@ -83,18 +116,57 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
       if (!selectedClientId) {
         setForm((prev) => ({
           ...prev,
-          ...data,
-          amount: data.amount ? String(data.amount) : prev.amount
+          client_name: data.client_name || prev.client_name,
+          client_email: data.client_email || prev.client_email,
+          invoice_number: data.invoice_number || prev.invoice_number,
+          currency: data.currency || prev.currency,
+          issue_date: data.invoice_date || prev.issue_date,
+          due_date: data.due_date || prev.due_date,
+          amount: data.total ? String(data.total) : prev.amount
         }));
       } else {
         setForm((prev) => ({
           ...prev,
           invoice_number: data.invoice_number || prev.invoice_number,
-          amount: data.amount ? String(data.amount) : prev.amount,
+          amount: data.total ? String(data.total) : prev.amount,
           currency: data.currency || prev.currency,
-          issue_date: data.issue_date || prev.issue_date,
+          issue_date: data.invoice_date || prev.issue_date,
           due_date: data.due_date || prev.due_date
         }));
+      }
+
+      if (data.client_email) {
+        const match = clientByEmail.get(String(data.client_email).toLowerCase());
+        if (match) {
+          setSelectedClientId(match.id);
+          setForm((prev) => ({
+            ...prev,
+            client_name: match.name,
+            client_email: match.email
+          }));
+        }
+      }
+
+      setAiMeta({
+        ai_extracted: Boolean(data.ai_extracted),
+        ai_confidence: data.ai_confidence ?? null,
+        source_file_path: data.file_path || null,
+        subtotal: data.subtotal ? String(data.subtotal) : "",
+        tax: data.tax ? String(data.tax) : "",
+        total: data.total ? String(data.total) : "",
+        payment_terms: data.payment_terms || "",
+        bill_to_address: data.client_address || ""
+      });
+
+      if (Array.isArray(data.line_items) && data.line_items.length > 0) {
+        setLineItems(
+          data.line_items.map((item: any) => ({
+            description: item.description || "",
+            quantity: item.quantity ? String(item.quantity) : "",
+            unit_price: item.unit_price ? String(item.unit_price) : "",
+            line_total: item.line_total ? String(item.line_total) : ""
+          }))
+        );
       }
 
       addToast({
@@ -120,7 +192,24 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
     const payload = {
       client_id: selectedClientId || undefined,
       ...form,
-      amount: Number(form.amount)
+      amount: Number(form.amount),
+      subtotal: aiMeta.subtotal ? Number(aiMeta.subtotal) : undefined,
+      tax: aiMeta.tax ? Number(aiMeta.tax) : undefined,
+      total: aiMeta.total ? Number(aiMeta.total) : undefined,
+      payment_terms: aiMeta.payment_terms || undefined,
+      bill_to_address: aiMeta.bill_to_address || undefined,
+        ai_extracted: aiMeta.ai_extracted,
+        ai_confidence: aiMeta.ai_confidence ?? undefined,
+        extracted_at: aiMeta.ai_extracted ? new Date().toISOString() : undefined,
+        source_file_path: aiMeta.source_file_path || undefined,
+        line_items: lineItems
+        .filter((item) => item.description.trim().length > 0)
+        .map((item) => ({
+          description: item.description,
+          quantity: item.quantity ? Number(item.quantity) : undefined,
+          unit_price: item.unit_price ? Number(item.unit_price) : undefined,
+          line_total: item.line_total ? Number(item.line_total) : undefined
+        }))
     };
 
     try {
@@ -151,6 +240,17 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
         due_date: "",
         status: "open"
       });
+      setAiMeta({
+        ai_extracted: false,
+        ai_confidence: null,
+        source_file_path: null,
+        subtotal: "",
+        tax: "",
+        total: "",
+        payment_terms: "",
+        bill_to_address: ""
+      });
+      setLineItems([{ description: "", quantity: "", unit_price: "", line_total: "" }]);
       setSelectedClientId("");
     } catch (error) {
       addToast({
@@ -174,16 +274,27 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
 
       <div>
         <label className="label" htmlFor="invoice-pdf">
-          Auto-fill from PDF
+          Auto-fill from PDF or image
         </label>
         <input
           id="invoice-pdf"
           className="input mt-1"
           type="file"
-          accept="application/pdf"
+          accept="application/pdf,image/*"
           onChange={handlePdfParse}
           disabled={parsing}
         />
+        {parsing && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+            Extracting invoice data…
+          </div>
+        )}
+        {aiMeta.ai_extracted && (
+          <p className="mt-2 text-xs text-emerald-600">
+            AI extraction confidence: {Math.round((aiMeta.ai_confidence || 0) * 100)}%
+          </p>
+        )}
       </div>
 
       <form className="space-y-4" onSubmit={handleSubmit}>
@@ -313,6 +424,158 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
           </div>
         </div>
 
+        <div className="grid gap-4 md:grid-cols-3">
+          <div>
+            <label className="label" htmlFor="subtotal">
+              Subtotal
+            </label>
+            <input
+              id="subtotal"
+              className="input mt-1"
+              value={aiMeta.subtotal}
+              onChange={(event) =>
+                setAiMeta((prev) => ({ ...prev, subtotal: event.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="tax">
+              Tax
+            </label>
+            <input
+              id="tax"
+              className="input mt-1"
+              value={aiMeta.tax}
+              onChange={(event) => setAiMeta((prev) => ({ ...prev, tax: event.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="total">
+              Total
+            </label>
+            <input
+              id="total"
+              className="input mt-1"
+              value={aiMeta.total}
+              onChange={(event) => setAiMeta((prev) => ({ ...prev, total: event.target.value }))}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="payment_terms">
+              Payment terms
+            </label>
+            <input
+              id="payment_terms"
+              className="input mt-1"
+              value={aiMeta.payment_terms}
+              onChange={(event) =>
+                setAiMeta((prev) => ({ ...prev, payment_terms: event.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="bill_to_address">
+              Bill-to address
+            </label>
+            <input
+              id="bill_to_address"
+              className="input mt-1"
+              value={aiMeta.bill_to_address}
+              onChange={(event) =>
+                setAiMeta((prev) => ({ ...prev, bill_to_address: event.target.value }))
+              }
+            />
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="label">Line items</label>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() =>
+                setLineItems((prev) => [
+                  ...prev,
+                  { description: "", quantity: "", unit_price: "", line_total: "" }
+                ])
+              }
+            >
+              Add item
+            </button>
+          </div>
+          <div className="space-y-3">
+            {lineItems.map((item, index) => (
+              <div key={index} className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+                <input
+                  className="input"
+                  placeholder="Description"
+                  value={item.description}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setLineItems((prev) =>
+                      prev.map((row, idx) =>
+                        idx === index ? { ...row, description: value } : row
+                      )
+                    );
+                  }}
+                />
+                <input
+                  className="input"
+                  placeholder="Qty"
+                  value={item.quantity}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setLineItems((prev) =>
+                      prev.map((row, idx) =>
+                        idx === index ? { ...row, quantity: value } : row
+                      )
+                    );
+                  }}
+                />
+                <input
+                  className="input"
+                  placeholder="Unit price"
+                  value={item.unit_price}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setLineItems((prev) =>
+                      prev.map((row, idx) =>
+                        idx === index ? { ...row, unit_price: value } : row
+                      )
+                    );
+                  }}
+                />
+                <input
+                  className="input"
+                  placeholder="Line total"
+                  value={item.line_total}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setLineItems((prev) =>
+                      prev.map((row, idx) =>
+                        idx === index ? { ...row, line_total: value } : row
+                      )
+                    );
+                  }}
+                />
+                <button
+                  type="button"
+                  className="button-danger"
+                  onClick={() =>
+                    setLineItems((prev) => prev.filter((_, idx) => idx !== index))
+                  }
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div>
           <label className="label" htmlFor="status">
             Status
@@ -331,8 +594,8 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
           </select>
         </div>
 
-        <button className="button" type="submit" disabled={loading}>
-          {loading ? "Saving..." : "Save invoice"}
+        <button className="button" type="submit" disabled={loading || parsing}>
+          {loading ? "Saving..." : parsing ? "Parsing..." : "Save invoice"}
         </button>
       </form>
     </div>

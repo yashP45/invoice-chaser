@@ -1,0 +1,4 @@
+Invoice #,Customer,Contact Email,Balance Due,Currency,Invoice Date,Due Date,Status
+INV-4001,Orbit Labs,finance@orbitlabs.io,1500,USD,2026-01-02,2026-01-17,Open
+INV-4002,Sunset Agency,hello@sunset.agency,600,USD,2026-01-08,2026-01-22,Partial
+INV-4003,Vertex Co,ap@vertex.co,2750,USD,2025-12-15,2026-01-14,Open

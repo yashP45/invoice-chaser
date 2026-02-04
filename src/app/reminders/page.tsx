@@ -15,7 +15,7 @@ export default async function RemindersPage() {
   const { data: reminders } = await supabase
     .from("reminders")
     .select(
-      "id, reminder_stage, sent_at, status, invoices(invoice_number, clients(name))"
+      "id, reminder_stage, sent_at, status, invoices(id, invoice_number, clients(name))"
     )
     .eq("user_id", user.id)
     .order("sent_at", { ascending: false })
@@ -39,6 +39,7 @@ export default async function RemindersPage() {
                 <th>Stage</th>
                 <th>Sent</th>
                 <th>Status</th>
+                <th>AI</th>
                 <th>Delete</th>
               </tr>
             </thead>
@@ -52,13 +53,27 @@ export default async function RemindersPage() {
                   </td>
                   <td>
                     {(Array.isArray(reminder.invoices)
-                      ? reminder.invoices[0]?.clients?.[0]
-                      : reminder.invoices?.clients)?.name}
+                      ? reminder.invoices[0]
+                      : reminder.invoices)?.clients?.[0]?.name}
                   </td>
                   <td>Stage {reminder.reminder_stage}</td>
                   <td>{reminder.sent_at ? formatDate(reminder.sent_at) : "-"}</td>
                   <td>
                     <ReminderStatusBadge status={reminder.status} />
+                  </td>
+                  <td>
+                    {reminder.invoices && (
+                      <a
+                        href={`/reminders/variants?invoice=${encodeURIComponent(
+                          (Array.isArray(reminder.invoices)
+                            ? reminder.invoices[0]
+                            : reminder.invoices)?.id || ""
+                        )}`}
+                        className="text-xs font-semibold text-slate-500 underline"
+                      >
+                        Variants
+                      </a>
+                    )}
                   </td>
                   <td>
                     <form className="flex justify-start">

@@ -1,17 +1,29 @@
 import { NextResponse } from "next/server";
-import pdfParse from "pdf-parse";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getUser } from "@/lib/supabase/server";
+import { invoiceExtractionSchema } from "@/lib/ai/schemas";
 
 export const runtime = "nodejs";
 
 type AiInvoicePayload = {
-  invoice_number?: string;
   client_name?: string;
   client_email?: string;
-  amount?: string | number;
-  currency?: string;
-  issue_date?: string;
+  client_address?: string;
+  invoice_number?: string;
+  invoice_date?: string;
   due_date?: string;
+  payment_terms?: string;
+  currency?: string;
+  subtotal?: number;
+  tax?: number;
+  total?: number;
+  line_items?: Array<{
+    description?: string;
+    quantity?: number;
+    unit_price?: number;
+    line_total?: number;
+  }>;
+  confidence?: number;
 };
 
 function parseDateValue(raw: string | undefined) {
@@ -61,50 +73,58 @@ function extractResponseText(response: any) {
   return chunks.join("").trim();
 }
 
-function parseJsonPayload(text: string): AiInvoicePayload | null {
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      return null;
-    }
+async function extractPdfText(buffer: Uint8Array) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const loadingTask = pdfjs.getDocument({ data: buffer, disableWorker: true });
+  const pdf = await loadingTask.promise;
+  let output = "";
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+    const page = await pdf.getPage(pageNum);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item: any) => ("str" in item ? item.str : ""))
+      .join(" ");
+    output += `${pageText} `;
   }
+  return output.trim();
 }
 
 async function parseWithOpenAI(file: File) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
-  const uploadForm = new FormData();
-  uploadForm.append("purpose", "user_data");
-  uploadForm.append("file", file, file.name);
+  const isImage = file.type.startsWith("image/");
+  const isPdf =
+    file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 
-  const uploadResponse = await fetch("https://api.openai.com/v1/files", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: uploadForm
-  });
+  let fileId: string | null = null;
+  let imageUrl: string | null = null;
 
-  const uploadData = await uploadResponse.json();
-  if (!uploadResponse.ok) {
-    throw new Error(uploadData?.error?.message || "OpenAI file upload failed");
+  if (isImage) {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const base64 = buffer.toString("base64");
+    imageUrl = `data:${file.type};base64,${base64}`;
+  } else if (isPdf) {
+    const uploadForm = new FormData();
+    uploadForm.append("purpose", "user_data");
+    uploadForm.append("file", file, file.name);
+
+    const uploadResponse = await fetch("https://api.openai.com/v1/files", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: uploadForm
+    });
+
+    const uploadData = await uploadResponse.json();
+    if (!uploadResponse.ok) {
+      throw new Error(uploadData?.error?.message || "OpenAI file upload failed");
+    }
+    fileId = uploadData.id;
+  } else {
+    return null;
   }
-
-  const prompt = [
-    "You are an assistant that extracts invoice data from PDFs.",
-    "Return strictly JSON with keys:",
-    "invoice_number, client_name, client_email, amount, currency, issue_date, due_date.",
-    "Use ISO date format YYYY-MM-DD. If unknown, use empty string.",
-    "amount should be a numeric string like \"1250.00\".",
-    "Respond with JSON only."
-  ].join(" ");
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -114,12 +134,30 @@ async function parseWithOpenAI(file: File) {
     },
     body: JSON.stringify({
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      text: {
+        format: {
+          type: "json_schema",
+          name: invoiceExtractionSchema.name,
+          schema: invoiceExtractionSchema.schema,
+          strict: invoiceExtractionSchema.strict
+        }
+      },
       input: [
         {
           role: "user",
           content: [
-            { type: "input_file", file_id: uploadData.id },
-            { type: "input_text", text: prompt }
+            ...(fileId ? [{ type: "input_file", file_id: fileId }] : []),
+            ...(imageUrl ? [{ type: "input_image", image_url: imageUrl }] : []),
+            {
+              type: "input_text",
+              text: [
+                "Extract invoice data. Return JSON that matches the schema.",
+                "Use ISO date format YYYY-MM-DD.",
+                "If a field is missing, return empty string or null.",
+                "Line items should include description, quantity, unit_price, line_total.",
+                "Confidence should be 0-1."
+              ].join(" ")
+            }
           ]
         }
       ]
@@ -132,8 +170,8 @@ async function parseWithOpenAI(file: File) {
   }
 
   const outputText = extractResponseText(responseData);
-  const payload = parseJsonPayload(outputText);
-  return payload;
+  if (!outputText) return null;
+  return JSON.parse(outputText);
 }
 
 export async function POST(request: Request) {
@@ -146,21 +184,75 @@ export async function POST(request: Request) {
   const file = formData.get("file");
 
   if (!file || !(file instanceof File)) {
-    return NextResponse.json({ error: "PDF file required" }, { status: 400 });
+    return NextResponse.json({ error: "PDF or image file required" }, { status: 400 });
   }
 
+  const isPdf =
+    file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  const isImage = file.type.startsWith("image/");
+
+  const maxSizeMb = Number(process.env.MAX_UPLOAD_MB || 20);
+  if (file.size > maxSizeMb * 1024 * 1024) {
+    return NextResponse.json({ error: "File too large" }, { status: 400 });
+  }
+
+  const admin = createAdminSupabaseClient();
+  await admin.from("users").upsert({ id: user.id, email: user.email });
+
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "invoice_uploads";
+  const tempPath = `${user.id}/temp/${crypto.randomUUID()}/${file.name}`;
+  const { error: uploadError } = await admin.storage
+    .from(bucket)
+    .upload(tempPath, file, { contentType: file.type, upsert: false });
+
+  if (uploadError) {
+    return NextResponse.json({ error: uploadError.message }, { status: 400 });
+  }
+
+  let aiPayload: AiInvoicePayload | null = null;
+  let aiError: string | null = null;
   try {
-    const aiPayload = await parseWithOpenAI(file);
-    if (aiPayload) {
-      return NextResponse.json(aiPayload);
-    }
+    aiPayload = await parseWithOpenAI(file);
   } catch (error) {
-    // Fall back to heuristic parsing below.
+    aiError = error instanceof Error ? error.message : "AI extraction failed";
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const parsed = await pdfParse(buffer);
-  const text = parsed.text.replace(/\s+/g, " ").trim();
+  if (aiPayload) {
+    return NextResponse.json({
+      ...aiPayload,
+      ai_extracted: true,
+      ai_confidence: aiPayload.confidence ?? null,
+      file_path: tempPath
+    });
+  }
+
+  if (!isPdf) {
+    return NextResponse.json(
+      {
+        error:
+          "AI extraction failed and fallback parsing is only available for PDFs.",
+        file_path: tempPath
+      },
+      { status: 400 }
+    );
+  }
+
+  let text = "";
+  try {
+    const buffer = new Uint8Array(await file.arrayBuffer());
+    const parsed = await extractPdfText(buffer);
+    text = parsed.replace(/\s+/g, " ").trim();
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: aiError
+          ? `AI extraction failed: ${aiError}. PDF text extraction also failed.`
+          : "Unable to read PDF text. Please try another file.",
+        file_path: tempPath
+      },
+      { status: 400 }
+    );
+  }
 
   const aiEndpoint = process.env.INVOICE_AI_ENDPOINT;
   if (aiEndpoint) {
@@ -229,9 +321,12 @@ export async function POST(request: Request) {
     invoice_number: invoiceNumber || "",
     client_email: clientEmail || "",
     client_name: clientName || "",
-    amount: amount || "",
+    total: amount || null,
     currency,
-    issue_date: issueDate ? issueDate.toISOString().slice(0, 10) : "",
-    due_date: dueDate ? dueDate.toISOString().slice(0, 10) : ""
+    invoice_date: issueDate ? issueDate.toISOString().slice(0, 10) : "",
+    due_date: dueDate ? dueDate.toISOString().slice(0, 10) : "",
+    ai_extracted: false,
+    ai_confidence: null,
+    file_path: tempPath
   });
 }

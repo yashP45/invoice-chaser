@@ -15,7 +15,9 @@ export default async function InvoicesPage() {
   const supabase = createServerSupabaseClient();
   const { data: invoices } = await supabase
     .from("invoices")
-    .select("id, invoice_number, amount, currency, due_date, status, clients(name)")
+    .select(
+      "id, invoice_number, amount, currency, due_date, status, ai_extracted, ai_confidence, source_file_path, clients(name)"
+    )
     .eq("user_id", user.id)
     .order("due_date", { ascending: true });
 
@@ -46,6 +48,8 @@ export default async function InvoicesPage() {
                 <th>Due date</th>
                 <th>Days overdue</th>
                 <th>Status</th>
+                <th>AI</th>
+                <th>File</th>
                 <th>Update</th>
                 <th>Delete</th>
               </tr>
@@ -63,6 +67,29 @@ export default async function InvoicesPage() {
                   <td>{daysOverdue(invoice.due_date)}</td>
                   <td>
                     <StatusBadge status={invoice.status} />
+                  </td>
+                  <td>
+                    {invoice.ai_extracted ? (
+                      <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                        AI {invoice.ai_confidence ? `· ${Math.round(invoice.ai_confidence * 100)}%` : ""}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">-</span>
+                    )}
+                  </td>
+                  <td>
+                    {invoice.source_file_path ? (
+                      <a
+                        href={`/api/invoices/file?path=${encodeURIComponent(
+                          invoice.source_file_path
+                        )}`}
+                        className="text-xs font-semibold text-slate-500 underline"
+                      >
+                        View file
+                      </a>
+                    ) : (
+                      <span className="text-xs text-slate-400">-</span>
+                    )}
                   </td>
                   <td>
                     <form action={updateInvoiceStatus} className="flex gap-2">

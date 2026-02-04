@@ -40,6 +40,26 @@ export async function updateClientEmail(formData: FormData) {
   revalidatePath("/clients");
 }
 
+export async function createClient(formData: FormData) {
+  const user = await getUser();
+  if (!user) return;
+
+  const name = String(formData.get("name") || "").trim();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+
+  if (!name || !email) return;
+
+  const supabase = createServerSupabaseClient();
+  await supabase
+    .from("clients")
+    .upsert(
+      { user_id: user.id, name, email },
+      { onConflict: "user_id,email" }
+    );
+
+  revalidatePath("/clients");
+}
+
 export async function updateUserSettings(formData: FormData) {
   const user = await getUser();
   if (!user) return;

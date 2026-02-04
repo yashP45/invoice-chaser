@@ -13,7 +13,8 @@ export function ImportForm() {
     event.preventDefault();
     setLoading(true);
 
-    const formData = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const formData = new FormData(formElement);
     const response = await fetch("/api/import", {
       method: "POST",
       body: formData
@@ -32,7 +33,7 @@ export function ImportForm() {
         description: `Imported ${data.inserted} invoices. ${data.skipped} skipped.`,
         variant: "success"
       });
-      event.currentTarget.reset();
+      formElement.reset();
       router.refresh();
     }
 
@@ -45,7 +46,7 @@ export function ImportForm() {
         <p className="text-sm font-semibold text-slate-700">Upload CSV</p>
         <p className="text-xs text-slate-500">
           We auto-map common exports (QuickBooks, Xero). Required: invoice, client, email,
-          amount, due date.
+          amount, due date. For PDFs/images, use the manual form on Invoices.
         </p>
       </div>
       <div>
