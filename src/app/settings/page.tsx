@@ -105,9 +105,14 @@ export default async function SettingsPage() {
             defaultValue={settings?.reminder_body || DEFAULT_BODY}
           />
           <p className="mt-2 text-xs text-slate-500">
-            Available tokens: {{`{{client_name}}`}}, {{`{{invoice_number}}`}},
-            {{`{{amount}}`}}, {{`{{due_date}}`}}, {{`{{days_overdue}}`}},
-            {{`{{sender_name}}`}}, {{`{{company_name}}`}}.
+            Available tokens:{" "}
+            <code className="font-semibold text-slate-600">{`{{client_name}}`}</code>,{" "}
+            <code className="font-semibold text-slate-600">{`{{invoice_number}}`}</code>,{" "}
+            <code className="font-semibold text-slate-600">{`{{amount}}`}</code>,{" "}
+            <code className="font-semibold text-slate-600">{`{{due_date}}`}</code>,{" "}
+            <code className="font-semibold text-slate-600">{`{{days_overdue}}`}</code>,{" "}
+            <code className="font-semibold text-slate-600">{`{{sender_name}}`}</code>,{" "}
+            <code className="font-semibold text-slate-600">{`{{company_name}}`}</code>.
           </p>
         </div>
 

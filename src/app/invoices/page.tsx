@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
 import { daysOverdue, formatDate } from "@/lib/utils/date";
-import { updateInvoiceStatus } from "@/lib/actions";
+import { deleteInvoice, updateInvoiceStatus } from "@/lib/actions";
 import { StatusBadge } from "@/components/status-badge";
 import { InvoiceCreateForm } from "@/components/invoice-create-form";
+import { ConfirmButton } from "@/components/confirm-button";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,12 @@ export default async function InvoicesPage() {
     .eq("user_id", user.id)
     .order("due_date", { ascending: true });
 
+  const { data: clients } = await supabase
+    .from("clients")
+    .select("id, name, email")
+    .eq("user_id", user.id)
+    .order("name");
+
   return (
     <div className="space-y-6">
       <div>
@@ -27,7 +34,7 @@ export default async function InvoicesPage() {
         </p>
       </div>
 
-      <InvoiceCreateForm />
+      <InvoiceCreateForm clients={clients || []} />
 
       <div className="card p-6">
         {invoices && invoices.length > 0 ? (
@@ -40,13 +47,18 @@ export default async function InvoicesPage() {
                 <th>Days overdue</th>
                 <th>Status</th>
                 <th>Update</th>
+                <th>Delete</th>
               </tr>
             </thead>
             <tbody>
               {invoices.map((invoice) => (
                 <tr key={invoice.id}>
                   <td>{invoice.invoice_number}</td>
-                  <td>{invoice.clients?.name}</td>
+                  <td>
+                    {(Array.isArray(invoice.clients)
+                      ? invoice.clients[0]
+                      : invoice.clients)?.name}
+                  </td>
                   <td>{formatDate(invoice.due_date)}</td>
                   <td>{daysOverdue(invoice.due_date)}</td>
                   <td>
@@ -64,6 +76,18 @@ export default async function InvoicesPage() {
                       <button className="button-secondary" name="status" value="paid">
                         Paid
                       </button>
+                    </form>
+                  </td>
+                  <td>
+                    <form className="flex justify-start">
+                      <input type="hidden" name="invoice_id" value={invoice.id} />
+                      <ConfirmButton
+                        formAction={deleteInvoice}
+                        confirmText={`Delete invoice ${invoice.invoice_number}?`}
+                        className="button-danger"
+                      >
+                        Delete
+                      </ConfirmButton>
                     </form>
                   </td>
                 </tr>

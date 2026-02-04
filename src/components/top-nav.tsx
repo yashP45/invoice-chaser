@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { getUser } from "@/lib/supabase/server";
 import { SignOutButton } from "@/components/sign-out-button";
+import { FloatingNav } from "@/components/floating-nav";
 
 export async function TopNav() {
   const user = await getUser();
 
   return (
     <header className="fixed left-1/2 top-6 z-50 w-[min(95vw,1120px)] -translate-x-1/2">
-      <div className="rounded-full border border-slate-200/70 bg-white/85 px-4 py-3 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.55)] backdrop-blur">
-        <div className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
-          <div className="hidden items-center gap-3 md:flex">
-            <Link href="/" className="text-lg font-semibold text-ink">
+      <FloatingNav>
+        <div className="rounded-full border border-slate-200/70 bg-white/85 px-4 py-3 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.55)] backdrop-blur">
+          <div className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
+            <div className="hidden items-center gap-3 md:flex">
+              <Link href="/" className="text-lg font-semibold text-ink">
               <span className="flex items-center gap-3">
                 <img
                   src="/logo-mark.svg"
@@ -70,9 +72,10 @@ export async function TopNav() {
                 </>
               )}
             </div>
+            </div>
           </div>
         </div>
-      </div>
+      </FloatingNav>
     </header>
   );
 }

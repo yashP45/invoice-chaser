@@ -4,6 +4,16 @@ import { getUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
+type AiInvoicePayload = {
+  invoice_number?: string;
+  client_name?: string;
+  client_email?: string;
+  amount?: string | number;
+  currency?: string;
+  issue_date?: string;
+  due_date?: string;
+};
+
 function parseDateValue(raw: string | undefined) {
   if (!raw) return null;
   const cleaned = raw.trim();
@@ -30,6 +40,102 @@ function findFirst(regexes: RegExp[], text: string) {
   return null;
 }
 
+function extractResponseText(response: any) {
+  if (typeof response?.output_text === "string") {
+    return response.output_text;
+  }
+
+  const chunks: string[] = [];
+  const output = response?.output;
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      if (item?.type === "message" && Array.isArray(item.content)) {
+        for (const part of item.content) {
+          if (part?.type === "output_text" && typeof part.text === "string") {
+            chunks.push(part.text);
+          }
+        }
+      }
+    }
+  }
+  return chunks.join("").trim();
+}
+
+function parseJsonPayload(text: string): AiInvoicePayload | null {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
+async function parseWithOpenAI(file: File) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const uploadForm = new FormData();
+  uploadForm.append("purpose", "user_data");
+  uploadForm.append("file", file, file.name);
+
+  const uploadResponse = await fetch("https://api.openai.com/v1/files", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: uploadForm
+  });
+
+  const uploadData = await uploadResponse.json();
+  if (!uploadResponse.ok) {
+    throw new Error(uploadData?.error?.message || "OpenAI file upload failed");
+  }
+
+  const prompt = [
+    "You are an assistant that extracts invoice data from PDFs.",
+    "Return strictly JSON with keys:",
+    "invoice_number, client_name, client_email, amount, currency, issue_date, due_date.",
+    "Use ISO date format YYYY-MM-DD. If unknown, use empty string.",
+    "amount should be a numeric string like \"1250.00\".",
+    "Respond with JSON only."
+  ].join(" ");
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "input_file", file_id: uploadData.id },
+            { type: "input_text", text: prompt }
+          ]
+        }
+      ]
+    })
+  });
+
+  const responseData = await response.json();
+  if (!response.ok) {
+    throw new Error(responseData?.error?.message || "OpenAI parse failed");
+  }
+
+  const outputText = extractResponseText(responseData);
+  const payload = parseJsonPayload(outputText);
+  return payload;
+}
+
 export async function POST(request: Request) {
   const user = await getUser();
   if (!user) {
@@ -41,6 +147,15 @@ export async function POST(request: Request) {
 
   if (!file || !(file instanceof File)) {
     return NextResponse.json({ error: "PDF file required" }, { status: 400 });
+  }
+
+  try {
+    const aiPayload = await parseWithOpenAI(file);
+    if (aiPayload) {
+      return NextResponse.json(aiPayload);
+    }
+  } catch (error) {
+    // Fall back to heuristic parsing below.
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());

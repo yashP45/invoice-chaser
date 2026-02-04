@@ -79,12 +79,14 @@ export async function POST(request: Request) {
     const reminderKey = `${invoice.id}:${stage}`;
     if (sentMap.has(reminderKey)) continue;
 
-    const clientEmail = invoice.clients?.email;
+    const client =
+      Array.isArray(invoice.clients) ? invoice.clients[0] : invoice.clients;
+    const clientEmail = client?.email;
     if (!clientEmail) continue;
 
     try {
       const templateData = {
-        client_name: invoice.clients?.name || "there",
+        client_name: client?.name || "there",
         invoice_number: invoice.invoice_number,
         amount: `${invoice.currency || "USD"} ${Number(invoice.amount).toFixed(2)}`,
         due_date: formatDate(invoice.due_date),

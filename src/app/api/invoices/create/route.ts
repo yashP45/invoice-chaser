@@ -6,6 +6,7 @@ import { getUser } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 const InvoiceSchema = z.object({
+  client_id: z.string().optional(),
   client_name: z.string().min(1),
   client_email: z.string().email(),
   invoice_number: z.string().min(1),
@@ -35,23 +36,43 @@ export async function POST(request: Request) {
     email: user.email
   });
 
-  const { data: clientRows, error: clientError } = await admin
-    .from("clients")
-    .upsert(
-      {
-        user_id: user.id,
-        name: result.data.client_name,
-        email: result.data.client_email.toLowerCase()
-      },
-      { onConflict: "user_id,email" }
-    )
-    .select("id");
+  let clientId = result.data.client_id || "";
 
-  if (clientError || !clientRows?.[0]?.id) {
-    return NextResponse.json(
-      { error: clientError?.message || "Client upsert failed" },
-      { status: 400 }
-    );
+  if (clientId) {
+    const { data: existingClient, error: existingError } = await admin
+      .from("clients")
+      .select("id")
+      .eq("id", clientId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (existingError || !existingClient) {
+      return NextResponse.json(
+        { error: "Selected client not found." },
+        { status: 400 }
+      );
+    }
+    clientId = existingClient.id;
+  } else {
+    const { data: clientRows, error: clientError } = await admin
+      .from("clients")
+      .upsert(
+        {
+          user_id: user.id,
+          name: result.data.client_name,
+          email: result.data.client_email.toLowerCase()
+        },
+        { onConflict: "user_id,email" }
+      )
+      .select("id");
+
+    if (clientError || !clientRows?.[0]?.id) {
+      return NextResponse.json(
+        { error: clientError?.message || "Client upsert failed" },
+        { status: 400 }
+      );
+    }
+    clientId = clientRows[0].id;
   }
 
   const paidAt = result.data.status === "paid" ? new Date().toISOString() : null;
@@ -61,7 +82,7 @@ export async function POST(request: Request) {
     .upsert(
       {
         user_id: user.id,
-        client_id: clientRows[0].id,
+        client_id: clientId,
         invoice_number: result.data.invoice_number,
         amount: result.data.amount,
         currency: result.data.currency || "USD",

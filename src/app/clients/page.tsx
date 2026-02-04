@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
-import { updateClientEmail } from "@/lib/actions";
+import { deleteClient, updateClientEmail } from "@/lib/actions";
+import { ConfirmButton } from "@/components/confirm-button";
 
 export const dynamic = "force-dynamic";
 
@@ -50,9 +51,18 @@ export default async function ClientsPage() {
                   defaultValue={client.email}
                   required
                 />
-                <button className="button-secondary" type="submit">
-                  Save
-                </button>
+                <div className="flex gap-2">
+                  <button className="button-secondary" type="submit">
+                    Save
+                  </button>
+                  <ConfirmButton
+                    formAction={deleteClient}
+                    confirmText={`Delete ${client.name} and all invoices?`}
+                    className="button-danger"
+                  >
+                    Delete
+                  </ConfirmButton>
+                </div>
               </form>
             ))}
           </div>

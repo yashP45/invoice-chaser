@@ -158,7 +158,11 @@ export default async function DashboardPage() {
               {overdueInvoices.slice(0, 5).map((invoice) => (
                 <tr key={invoice.id}>
                   <td>{invoice.invoice_number}</td>
-                  <td>{invoice.clients?.name}</td>
+                  <td>
+                    {(Array.isArray(invoice.clients)
+                      ? invoice.clients[0]
+                      : invoice.clients)?.name}
+                  </td>
                   <td>{formatDate(invoice.due_date)}</td>
                   <td>{daysOverdue(invoice.due_date)}</td>
                   <td>${Number(invoice.amount).toFixed(2)}</td>

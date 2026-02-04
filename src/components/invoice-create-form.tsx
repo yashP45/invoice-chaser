@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast-provider";
+
+type ClientOption = {
+  id: string;
+  name: string;
+  email: string;
+};
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
@@ -11,9 +17,10 @@ const STATUS_OPTIONS = [
   { value: "void", label: "Void" }
 ];
 
-export function InvoiceCreateForm() {
+export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
   const { addToast } = useToast();
   const router = useRouter();
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [form, setForm] = useState({
     client_name: "",
     client_email: "",
@@ -27,8 +34,33 @@ export function InvoiceCreateForm() {
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
 
+  const clientMap = useMemo(() => {
+    return new Map(clients.map((client) => [client.id, client]));
+  }, [clients]);
+
   const updateField = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleClientSelect = (value: string) => {
+    setSelectedClientId(value);
+    if (!value) {
+      setForm((prev) => ({
+        ...prev,
+        client_name: "",
+        client_email: ""
+      }));
+      return;
+    }
+
+    const client = clientMap.get(value);
+    if (client) {
+      setForm((prev) => ({
+        ...prev,
+        client_name: client.name,
+        client_email: client.email
+      }));
+    }
   };
 
   const handlePdfParse = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -48,11 +80,22 @@ export function InvoiceCreateForm() {
         throw new Error(data.error || "Unable to parse PDF");
       }
 
-      setForm((prev) => ({
-        ...prev,
-        ...data,
-        amount: data.amount ? String(data.amount) : prev.amount
-      }));
+      if (!selectedClientId) {
+        setForm((prev) => ({
+          ...prev,
+          ...data,
+          amount: data.amount ? String(data.amount) : prev.amount
+        }));
+      } else {
+        setForm((prev) => ({
+          ...prev,
+          invoice_number: data.invoice_number || prev.invoice_number,
+          amount: data.amount ? String(data.amount) : prev.amount,
+          currency: data.currency || prev.currency,
+          issue_date: data.issue_date || prev.issue_date,
+          due_date: data.due_date || prev.due_date
+        }));
+      }
 
       addToast({
         title: "PDF parsed",
@@ -75,6 +118,7 @@ export function InvoiceCreateForm() {
     setLoading(true);
 
     const payload = {
+      client_id: selectedClientId || undefined,
       ...form,
       amount: Number(form.amount)
     };
@@ -107,6 +151,7 @@ export function InvoiceCreateForm() {
         due_date: "",
         status: "open"
       });
+      setSelectedClientId("");
     } catch (error) {
       addToast({
         title: "Save failed",
@@ -142,6 +187,34 @@ export function InvoiceCreateForm() {
       </div>
 
       <form className="space-y-4" onSubmit={handleSubmit}>
+        <div>
+          <label className="label" htmlFor="client_select">
+            Client master
+          </label>
+          <select
+            id="client_select"
+            className="input mt-1"
+            value={selectedClientId}
+            onChange={(event) => handleClientSelect(event.target.value)}
+          >
+            <option value="">Add new client</option>
+            {clients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.name} — {client.email}
+              </option>
+            ))}
+          </select>
+          {selectedClientId ? (
+            <p className="mt-1 text-xs text-slate-500">
+              Using an existing client. Update details in Clients.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">
+              Choose an existing client to avoid duplicates.
+            </p>
+          )}
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="label" htmlFor="client_name">
@@ -153,6 +226,7 @@ export function InvoiceCreateForm() {
               value={form.client_name}
               onChange={(event) => updateField("client_name", event.target.value)}
               required
+              disabled={Boolean(selectedClientId)}
             />
           </div>
           <div>
@@ -166,6 +240,7 @@ export function InvoiceCreateForm() {
               value={form.client_email}
               onChange={(event) => updateField("client_email", event.target.value)}
               required
+              disabled={Boolean(selectedClientId)}
             />
           </div>
         </div>

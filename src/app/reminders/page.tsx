@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/utils/date";
+import { deleteReminder } from "@/lib/actions";
+import { ConfirmButton } from "@/components/confirm-button";
 import { ReminderStatusBadge } from "@/components/reminder-status-badge";
 
 export const dynamic = "force-dynamic";
@@ -37,17 +39,38 @@ export default async function RemindersPage() {
                 <th>Stage</th>
                 <th>Sent</th>
                 <th>Status</th>
+                <th>Delete</th>
               </tr>
             </thead>
             <tbody>
               {reminders.map((reminder) => (
                 <tr key={reminder.id}>
-                  <td>{reminder.invoices?.invoice_number}</td>
-                  <td>{reminder.invoices?.clients?.name}</td>
+                  <td>
+                    {(Array.isArray(reminder.invoices)
+                      ? reminder.invoices[0]
+                      : reminder.invoices)?.invoice_number}
+                  </td>
+                  <td>
+                    {(Array.isArray(reminder.invoices)
+                      ? reminder.invoices[0]?.clients?.[0]
+                      : reminder.invoices?.clients)?.name}
+                  </td>
                   <td>Stage {reminder.reminder_stage}</td>
                   <td>{reminder.sent_at ? formatDate(reminder.sent_at) : "-"}</td>
                   <td>
                     <ReminderStatusBadge status={reminder.status} />
+                  </td>
+                  <td>
+                    <form className="flex justify-start">
+                      <input type="hidden" name="reminder_id" value={reminder.id} />
+                      <ConfirmButton
+                        formAction={deleteReminder}
+                        confirmText="Delete this reminder log entry?"
+                        className="button-danger"
+                      >
+                        Delete
+                      </ConfirmButton>
+                    </form>
                   </td>
                 </tr>
               ))}

@@ -64,3 +64,38 @@ export async function updateUserSettings(formData: FormData) {
 
   revalidatePath("/settings");
 }
+
+export async function deleteInvoice(formData: FormData) {
+  const user = await getUser();
+  if (!user) return;
+
+  const invoiceId = String(formData.get("invoice_id"));
+  const supabase = createServerSupabaseClient();
+  await supabase.from("invoices").delete().eq("id", invoiceId).eq("user_id", user.id);
+
+  revalidatePath("/invoices");
+  revalidatePath("/");
+}
+
+export async function deleteClient(formData: FormData) {
+  const user = await getUser();
+  if (!user) return;
+
+  const clientId = String(formData.get("client_id"));
+  const supabase = createServerSupabaseClient();
+  await supabase.from("clients").delete().eq("id", clientId).eq("user_id", user.id);
+
+  revalidatePath("/clients");
+  revalidatePath("/");
+}
+
+export async function deleteReminder(formData: FormData) {
+  const user = await getUser();
+  if (!user) return;
+
+  const reminderId = String(formData.get("reminder_id"));
+  const supabase = createServerSupabaseClient();
+  await supabase.from("reminders").delete().eq("id", reminderId).eq("user_id", user.id);
+
+  revalidatePath("/reminders");
+}

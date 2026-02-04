@@ -61,11 +61,13 @@ export default async function ClientDetailPage({
   });
 
   (reminders || []).forEach((reminder) => {
+    const invoice =
+      Array.isArray(reminder.invoices) ? reminder.invoices[0] : reminder.invoices;
     events.push({
       id: reminder.id,
       type: "reminder",
       title: `Reminder stage ${reminder.reminder_stage}`,
-      subtitle: `Invoice ${reminder.invoices?.invoice_number} · ${reminder.status}`,
+      subtitle: `Invoice ${invoice?.invoice_number || ""} · ${reminder.status}`,
       date: reminder.sent_at || new Date().toISOString()
     });
   });
