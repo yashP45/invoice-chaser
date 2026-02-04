@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  font-family: var(--font-body), "IBM Plex Sans", "Segoe UI", sans-serif;
+  @apply text-ink bg-slate-50;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display), "Playfair Display", serif;
+  letter-spacing: -0.02em;
+}
+
+.app-background {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at top left, rgba(14, 116, 144, 0.2), transparent 55%),
+    radial-gradient(circle at 30% 20%, rgba(249, 115, 22, 0.2), transparent 45%),
+    radial-gradient(circle at 70% 10%, rgba(14, 116, 144, 0.15), transparent 50%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.9));
+  z-index: -1;
+}
+
+.page-fade {
+  animation: fade-up 0.6s ease both;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card {
+  @apply bg-white/90 rounded-2xl border border-slate-200/70 shadow-[0_20px_45px_-40px_rgba(15,23,42,0.55)];
+  backdrop-filter: blur(6px);
+}
+
+.button {
+  @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 text-white text-sm font-semibold transition whitespace-nowrap;
+  background: linear-gradient(135deg, #0f172a, #1f2937);
+  box-shadow: 0 12px 25px -18px rgba(15, 23, 42, 0.8);
+}
+
+.button-secondary {
+  @apply inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-white/80 px-4 py-2 text-sm font-semibold text-ink hover:bg-white transition whitespace-nowrap;
+}
+
+.input {
+  @apply w-full rounded-xl border border-slate-300/80 bg-white/90 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400;
+}
+
+.label {
+  @apply text-sm font-semibold text-slate-700;
+}
+
+.table {
+  @apply w-full text-sm;
+}
+
+.table th {
+  @apply text-left font-semibold text-slate-600 pb-2;
+}
+
+.table td {
+  @apply py-2 border-t border-slate-100;
+}
+
+.table tbody tr:hover {
+  @apply bg-slate-50;
+}
+
+section[id] {
+  scroll-margin-top: 140px;
+}

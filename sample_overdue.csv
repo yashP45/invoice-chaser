@@ -1,0 +1,6 @@
+invoice_number,client_name,client_email,amount,currency,issue_date,due_date,status
+INV-2001,Acme Design,ar@acme.com,1200,USD,2026-01-05,2026-01-15,open
+INV-2002,Bluehill Media,billing@bluehill.com,850,USD,2026-01-10,2026-01-21,partial
+INV-2003,Northwind Studio,accounts@northwind.com,2300,USD,2025-12-15,2026-01-10,open
+INV-2004,Orbit Labs,finance@orbitlabs.io,1500,USD,2026-01-20,2026-02-03,open
+INV-2005,Sunset Agency,hello@sunset.agency,600,USD,2026-01-18,2026-02-01,open
