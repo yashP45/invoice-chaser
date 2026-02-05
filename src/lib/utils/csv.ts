@@ -155,10 +155,11 @@ function extractLineItems(row: z.infer<typeof RowSchema>) {
   }[] = [];
 
   for (let i = 1; i <= 5; i += 1) {
-    const description = row[`item${i}_desc` as const];
-    const qty = row[`item${i}_qty` as const];
-    const unitPrice = row[`item${i}_unit_price` as const];
-    const lineTotal = row[`item${i}_line_total` as const];
+    const typedRow = row as Record<string, string | undefined>;
+    const description = typedRow[`item${i}_desc`];
+    const qty = typedRow[`item${i}_qty`];
+    const unitPrice = typedRow[`item${i}_unit_price`];
+    const lineTotal = typedRow[`item${i}_line_total`];
 
     if (!description || description.trim().length === 0) continue;
 
