@@ -99,15 +99,20 @@ h4 {
 }
 
 .table th {
-  @apply text-left font-semibold text-slate-600 pb-2;
+  @apply text-left font-semibold text-slate-600 pb-2 whitespace-nowrap;
 }
 
 .table td {
-  @apply py-2 border-t border-slate-100;
+  @apply py-2 border-t border-slate-100 whitespace-nowrap;
 }
 
 .table tbody tr:hover {
   @apply bg-slate-50;
+}
+
+/* Table wrapper for horizontal scrolling on large screens */
+.table-wrapper {
+  @apply overflow-x-auto;
 }
 
 section[id] {

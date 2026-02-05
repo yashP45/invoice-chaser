@@ -57,59 +57,113 @@ export default async function RemindersPage({
         lastRunAt={lastReminder?.sent_at || null}
         cronIntervalHours={Number.isFinite(cronIntervalHours) ? cronIntervalHours : 24}
       />
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         {reminders && reminders.length > 0 ? (
           <>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Invoice</th>
-                  <th>Client</th>
-                  <th>Stage</th>
-                  <th>Sent</th>
-                  <th>Status</th>
-                  <th>Delete</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reminders.map((reminder) => (
-                  <tr key={reminder.id}>
-                    <td>
-                      {(Array.isArray(reminder.invoices)
-                        ? reminder.invoices[0]
-                        : reminder.invoices)?.invoice_number}
-                    </td>
-                    <td>
-                      {(() => {
-                        const invoice = Array.isArray(reminder.invoices)
-                          ? reminder.invoices[0]
-                          : reminder.invoices;
-                        const client = Array.isArray(invoice?.clients)
-                          ? invoice?.clients[0]
-                          : invoice?.clients;
-                        return client?.name || "—";
-                      })()}
-                    </td>
-                    <td>Stage {reminder.reminder_stage}</td>
-                    <td>{reminder.sent_at ? formatDate(reminder.sent_at) : "-"}</td>
-                    <td>
+            {/* Card view for small screens */}
+            <div className="space-y-4 lg:hidden">
+              {reminders.map((reminder) => {
+                const invoice = Array.isArray(reminder.invoices)
+                  ? reminder.invoices[0]
+                  : reminder.invoices;
+                const client = Array.isArray(invoice?.clients)
+                  ? invoice?.clients[0]
+                  : invoice?.clients;
+                return (
+                  <div
+                    key={reminder.id}
+                    className="border border-slate-200 rounded-xl p-5 sm:p-6 space-y-4"
+                  >
+                    <div>
+                      <h3 className="font-semibold text-slate-900 text-base mb-1">
+                        {invoice?.invoice_number || "—"}
+                      </h3>
+                      <p className="text-sm text-slate-600">{client?.name || "—"}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1">Stage</p>
+                        <p className="font-medium text-slate-900">Stage {reminder.reminder_stage}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1">Sent</p>
+                        <p className="font-medium text-slate-900">
+                          {reminder.sent_at ? formatDate(reminder.sent_at) : "-"}
+                        </p>
+                      </div>
+                    </div>
+                    <div>
                       <ReminderStatusBadge status={reminder.status} />
-                    </td>
-                    <td>
-                    <ConfirmDialog
-                      title="Delete this reminder log entry?"
-                      description="This will remove the reminder history item."
-                      triggerLabel="Delete"
-                      confirmLabel="Delete reminder"
-                      triggerClassName="button-danger-sm"
-                      formAction={deleteReminder}
-                      hiddenFields={{ reminder_id: reminder.id }}
-                    />
-                    </td>
+                    </div>
+                    <div className="pt-3 border-t border-slate-200">
+                      <ConfirmDialog
+                        title="Delete this reminder log entry?"
+                        description="This will remove the reminder history item."
+                        triggerLabel="Delete"
+                        confirmLabel="Delete reminder"
+                        triggerClassName="button-danger-sm text-xs w-full"
+                        formAction={deleteReminder}
+                        hiddenFields={{ reminder_id: reminder.id }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Table view for large screens */}
+            <div className="hidden lg:block table-wrapper">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Client</th>
+                    <th>Stage</th>
+                    <th>Sent</th>
+                    <th>Status</th>
+                    <th>Delete</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {reminders.map((reminder) => (
+                    <tr key={reminder.id}>
+                      <td>
+                        {(Array.isArray(reminder.invoices)
+                          ? reminder.invoices[0]
+                          : reminder.invoices)?.invoice_number}
+                      </td>
+                      <td>
+                        {(() => {
+                          const invoice = Array.isArray(reminder.invoices)
+                            ? reminder.invoices[0]
+                            : reminder.invoices;
+                          const client = Array.isArray(invoice?.clients)
+                            ? invoice?.clients[0]
+                            : invoice?.clients;
+                          return client?.name || "—";
+                        })()}
+                      </td>
+                      <td>Stage {reminder.reminder_stage}</td>
+                      <td>{reminder.sent_at ? formatDate(reminder.sent_at) : "-"}</td>
+                      <td>
+                        <ReminderStatusBadge status={reminder.status} />
+                      </td>
+                      <td>
+                        <ConfirmDialog
+                          title="Delete this reminder log entry?"
+                          description="This will remove the reminder history item."
+                          triggerLabel="Delete"
+                          confirmLabel="Delete reminder"
+                          triggerClassName="button-danger-sm"
+                          formAction={deleteReminder}
+                          hiddenFields={{ reminder_id: reminder.id }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <Pagination
               page={page}
               pageSize={pageSize}
