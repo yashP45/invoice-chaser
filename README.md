@@ -2,6 +2,8 @@
 
 Simple SaaS to import invoices, track overdue status, and send polite reminders.
 
+**Live demo:** _ADD_YOUR_URL_HERE_
+
 ## Setup
 
 1. Install deps:
@@ -9,11 +11,31 @@ Simple SaaS to import invoices, track overdue status, and send polite reminders.
    npm install
    ```
 2. Create `.env.local` from `.env.example` with your Supabase + Resend keys.
-3. Apply Supabase migration in `supabase/migrations/001_init.sql`.
+3. Apply Supabase migrations in order:
+   - `supabase/migrations/001_init.sql`
+   - `supabase/migrations/002_add_full_name.sql`
+   - `supabase/migrations/003_add_settings_and_paid_at.sql`
+   - `supabase/migrations/004_ai_invoice_upgrade.sql`
 4. Run:
    ```bash
    npm run dev
    ```
+
+## Sample Files (Upload + Test)
+Use these to quickly test CSV import and AI invoice parsing.
+
+**CSV templates**
+- Download template: `/templates/invoice_template.csv`
+- Repo file: `public/templates/invoice_template.csv`
+
+**CSV samples**
+- `test-data/sample_basic.csv`
+- `test-data/sample_aliases.csv`
+- `test-data/sample_line_items.csv`
+
+**PDF samples (AI extraction)**
+- `test-data/invoice_sample_1.pdf`
+- `test-data/invoice_sample_2.pdf`
 
 ## CSV Format
 Required columns (case-insensitive):

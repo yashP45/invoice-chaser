@@ -10,15 +10,56 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const { addToast } = useToast();
+
+  const handleResend = async () => {
+    if (!email) {
+      const errorMessage = "Please enter your email first.";
+      setMessage(errorMessage);
+      addToast({
+        title: "Missing email",
+        description: errorMessage,
+        variant: "error"
+      });
+      return;
+    }
+
+    setResending(true);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email
+      });
+      if (error) {
+        throw error;
+      }
+      addToast({
+        title: "Verification sent",
+        description: "Check your inbox for the new link.",
+        variant: "success"
+      });
+    } catch (error) {
+      addToast({
+        title: "Resend failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "error"
+      });
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
     setMessage(null);
+    setNeedsVerification(false);
 
     if (mode === "signup") {
       if (!fullName.trim()) {
@@ -59,6 +100,9 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     }
 
     const supabase = createBrowserSupabaseClient();
+    const redirectTo =
+      typeof window !== "undefined" ? `${window.location.origin}/login` : undefined;
+
     const action =
       mode === "login"
         ? supabase.auth.signInWithPassword({ email, password })
@@ -66,13 +110,14 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             email,
             password,
             options: {
+              emailRedirectTo: redirectTo,
               data: {
                 full_name: fullName.trim()
               }
             }
           });
 
-    const { error } = await action;
+    const { data, error } = await action;
     if (error) {
       setMessage(error.message);
       addToast({
@@ -84,8 +129,22 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       return;
     }
 
+    if (mode === "signup") {
+      const successMessage =
+        "Account created. Please check your email to verify and then log in.";
+      setMessage(successMessage);
+      setNeedsVerification(true);
+      addToast({
+        title: "Verify your email",
+        description: "We sent a verification link to your inbox.",
+        variant: "success"
+      });
+      setLoading(false);
+      return;
+    }
+
     addToast({
-      title: mode === "login" ? "Welcome back" : "Account created",
+      title: "Welcome back",
       description: "Redirecting you to your dashboard.",
       variant: "success"
     });
@@ -175,6 +234,16 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         </div>
       )}
       {message && <p className="text-sm text-ember">{message}</p>}
+      {mode === "signup" && needsVerification && (
+        <button
+          type="button"
+          className="button-secondary-sm"
+          onClick={handleResend}
+          disabled={resending}
+        >
+          {resending ? "Sending..." : "Resend verification email"}
+        </button>
+      )}
       <button className="button" type="submit" disabled={loading}>
         {loading ? "Working..." : mode === "login" ? "Log in" : "Create account"}
       </button>
