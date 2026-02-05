@@ -9,5 +9,7 @@ test("landing page loads", async ({ page }) => {
 
 test("login page loads", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: /log in/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /stay on top of overdue invoices/i })
+  ).toBeVisible();
 });
