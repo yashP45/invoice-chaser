@@ -100,8 +100,11 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     }
 
     const supabase = createBrowserSupabaseClient();
-    const redirectTo =
-      typeof window !== "undefined" ? `${window.location.origin}/login` : undefined;
+   const redirectTo =
+  typeof window !== "undefined"
+    ? `${(process.env.NEXT_PUBLIC_SITE_URL || window.location.origin)}/login`
+    : undefined;
+
 
     const action =
       mode === "login"
