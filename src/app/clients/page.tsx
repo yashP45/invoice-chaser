@@ -10,13 +10,14 @@ export const dynamic = "force-dynamic";
 export default async function ClientsPage({
   searchParams
 }: {
-  searchParams?: { page?: string };
+  searchParams?: Promise<{ page?: string }>;
 }) {
   const user = await getUser();
   if (!user) redirect("/login");
 
+  const resolvedSearchParams = await searchParams;
   const pageSize = 10;
-  const page = Math.max(1, Number(searchParams?.page || 1));
+  const page = Math.max(1, Number(resolvedSearchParams?.page || 1));
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -93,7 +94,7 @@ export default async function ClientsPage({
               pageSize={pageSize}
               total={count || 0}
               basePath="/clients"
-              searchParams={searchParams}
+              searchParams={resolvedSearchParams}
             />
           </>
         ) : (

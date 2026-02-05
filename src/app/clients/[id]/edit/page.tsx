@@ -15,16 +15,17 @@ async function updateClientEmailAndRedirect(formData: FormData) {
 export default async function EditClientPage({
   params
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const user = await getUser();
   if (!user) redirect("/login");
 
+  const resolvedParams = await params;
   const supabase = await createServerSupabaseClient();
   const { data: client } = await supabase
     .from("clients")
     .select("id, name, email")
-    .eq("id", params.id)
+    .eq("id", resolvedParams.id)
     .eq("user_id", user.id)
     .maybeSingle();
 

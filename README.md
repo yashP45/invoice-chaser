@@ -37,6 +37,26 @@ Use these to quickly test CSV import and AI invoice parsing.
 - `test-data/invoice_sample_1.pdf`
 - `test-data/invoice_sample_2.pdf`
 
+## Navigation Flow (Diagram)
+```mermaid
+flowchart TD
+  A["Landing"] --> B["Sign up"]
+  A --> C["Log in"]
+  B --> D["Verify email"]
+  D --> C
+  C --> E["Dashboard"]
+  E --> F["Invoices list"]
+  E --> G["Imports"]
+  E --> H["Reminders log"]
+  E --> I["Clients list"]
+  F --> J["Add invoice"]
+  F --> K["Edit invoice"]
+  I --> L["Add client"]
+  I --> M["Edit client"]
+  H --> N["Run reminders"]
+  H --> O["Variants (common)"]
+```
+
 ## CSV Format
 Required columns (case-insensitive):
 `invoice_number`, `client_name`, `client_email`, `amount`, `due_date`

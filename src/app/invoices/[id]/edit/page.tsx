@@ -8,11 +8,12 @@ export const dynamic = "force-dynamic";
 export default async function EditInvoicePage({
   params
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const user = await getUser();
   if (!user) redirect("/login");
 
+  const resolvedParams = await params;
   const supabase = await createServerSupabaseClient();
 
   const { data: invoice } = await supabase
@@ -20,7 +21,7 @@ export default async function EditInvoicePage({
     .select(
       "id, client_id, invoice_number, amount, currency, issue_date, due_date, status, subtotal, tax, total, payment_terms, bill_to_address, ai_extracted, ai_confidence, source_file_path, clients(name,email)"
     )
-    .eq("id", params.id)
+    .eq("id", resolvedParams.id)
     .eq("user_id", user.id)
     .maybeSingle();
 

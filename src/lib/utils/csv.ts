@@ -182,9 +182,13 @@ export function parseInvoiceCsv(csvText: string) {
     transformHeader: normalizeHeader
   });
 
-  const criticalErrors = errors.filter(
-    (error) => !(error.type === "FieldMismatch" && error.code === "TooFewFields")
-  );
+  const criticalErrors = errors.filter((error) => {
+    if (error.code === "TooFewFields" || error.code === "TooManyFields") {
+      return false;
+    }
+    if (error.type === "FieldMismatch") return false;
+    return true;
+  });
 
   if (criticalErrors.length) {
     return {
