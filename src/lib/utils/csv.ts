@@ -19,19 +19,45 @@ const HEADER_ALIASES: Record<string, string> = {
   "email": "client_email",
   "contact email": "client_email",
   "amount": "amount",
-  "total": "amount",
   "total amount": "amount",
   "amount due": "amount",
   "balance": "amount",
   "currency": "currency",
   "currency code": "currency",
+  "subtotal": "subtotal",
+  "tax": "tax",
+  "total": "total",
+  "payment terms": "payment_terms",
+  "payment_term": "payment_terms",
+  "bill to address": "bill_to_address",
+  "billing address": "bill_to_address",
   "issue date": "issue_date",
   "invoice date": "issue_date",
   "date": "issue_date",
   "due date": "due_date",
   "due": "due_date",
   "status": "status",
-  "invoice status": "status"
+  "invoice status": "status",
+  "item1_desc": "item1_desc",
+  "item1_qty": "item1_qty",
+  "item1_unit_price": "item1_unit_price",
+  "item1_line_total": "item1_line_total",
+  "item2_desc": "item2_desc",
+  "item2_qty": "item2_qty",
+  "item2_unit_price": "item2_unit_price",
+  "item2_line_total": "item2_line_total",
+  "item3_desc": "item3_desc",
+  "item3_qty": "item3_qty",
+  "item3_unit_price": "item3_unit_price",
+  "item3_line_total": "item3_line_total",
+  "item4_desc": "item4_desc",
+  "item4_qty": "item4_qty",
+  "item4_unit_price": "item4_unit_price",
+  "item4_line_total": "item4_line_total",
+  "item5_desc": "item5_desc",
+  "item5_qty": "item5_qty",
+  "item5_unit_price": "item5_unit_price",
+  "item5_line_total": "item5_line_total"
 };
 
 function normalizeHeader(header: string) {
@@ -45,9 +71,34 @@ const RowSchema = z.object({
   client_email: z.string().email(),
   amount: z.string().min(1),
   currency: z.string().optional(),
+  subtotal: z.string().optional(),
+  tax: z.string().optional(),
+  total: z.string().optional(),
+  payment_terms: z.string().optional(),
+  bill_to_address: z.string().optional(),
   issue_date: z.string().optional(),
   due_date: z.string().min(1),
-  status: z.string().optional()
+  status: z.string().optional(),
+  item1_desc: z.string().optional(),
+  item1_qty: z.string().optional(),
+  item1_unit_price: z.string().optional(),
+  item1_line_total: z.string().optional(),
+  item2_desc: z.string().optional(),
+  item2_qty: z.string().optional(),
+  item2_unit_price: z.string().optional(),
+  item2_line_total: z.string().optional(),
+  item3_desc: z.string().optional(),
+  item3_qty: z.string().optional(),
+  item3_unit_price: z.string().optional(),
+  item3_line_total: z.string().optional(),
+  item4_desc: z.string().optional(),
+  item4_qty: z.string().optional(),
+  item4_unit_price: z.string().optional(),
+  item4_line_total: z.string().optional(),
+  item5_desc: z.string().optional(),
+  item5_qty: z.string().optional(),
+  item5_unit_price: z.string().optional(),
+  item5_line_total: z.string().optional()
 });
 
 export type ParsedRow = z.infer<typeof RowSchema> & {
@@ -57,7 +108,19 @@ export type ParsedRow = z.infer<typeof RowSchema> & {
     issue_date: Date | null;
     due_date: Date;
     status: "open" | "partial" | "paid" | "void";
+    subtotal?: number | null;
+    tax?: number | null;
+    total?: number | null;
+    payment_terms?: string | null;
+    bill_to_address?: string | null;
   };
+  line_items: {
+    description: string;
+    quantity?: number | null;
+    unit_price?: number | null;
+    line_total?: number | null;
+    position: number;
+  }[];
 };
 
 function parseDate(value?: string) {
@@ -76,6 +139,41 @@ function normalizeStatus(value?: string) {
   return "open" as const;
 }
 
+function parseOptionalNumber(value?: string) {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function extractLineItems(row: z.infer<typeof RowSchema>) {
+  const lineItems: {
+    description: string;
+    quantity?: number | null;
+    unit_price?: number | null;
+    line_total?: number | null;
+    position: number;
+  }[] = [];
+
+  for (let i = 1; i <= 5; i += 1) {
+    const description = row[`item${i}_desc` as const];
+    const qty = row[`item${i}_qty` as const];
+    const unitPrice = row[`item${i}_unit_price` as const];
+    const lineTotal = row[`item${i}_line_total` as const];
+
+    if (!description || description.trim().length === 0) continue;
+
+    lineItems.push({
+      description: description.trim(),
+      quantity: parseOptionalNumber(qty),
+      unit_price: parseOptionalNumber(unitPrice),
+      line_total: parseOptionalNumber(lineTotal),
+      position: i
+    });
+  }
+
+  return lineItems;
+}
+
 export function parseInvoiceCsv(csvText: string) {
   const { data, errors } = Papa.parse<Record<string, string>>(csvText, {
     header: true,
@@ -83,8 +181,15 @@ export function parseInvoiceCsv(csvText: string) {
     transformHeader: normalizeHeader
   });
 
-  if (errors.length) {
-    return { rows: [], errors: errors.map((error) => error.message) };
+  const criticalErrors = errors.filter(
+    (error) => !(error.type === "FieldMismatch" && error.code === "TooFewFields")
+  );
+
+  if (criticalErrors.length) {
+    return {
+      rows: [],
+      errors: criticalErrors.map((error) => error.message)
+    };
   }
 
   const rows: ParsedRow[] = [];
@@ -110,6 +215,11 @@ export function parseInvoiceCsv(csvText: string) {
     }
 
     const issueDate = parseDate(result.data.issue_date);
+    const subtotal = parseOptionalNumber(result.data.subtotal);
+    const tax = parseOptionalNumber(result.data.tax);
+    const total = parseOptionalNumber(result.data.total);
+    const paymentTerms = result.data.payment_terms?.trim() || null;
+    const billToAddress = result.data.bill_to_address?.trim() || null;
 
     rows.push({
       ...result.data,
@@ -118,8 +228,14 @@ export function parseInvoiceCsv(csvText: string) {
         currency: result.data.currency?.trim() || "USD",
         issue_date: issueDate,
         due_date: dueDate,
-        status: normalizeStatus(result.data.status)
-      }
+        status: normalizeStatus(result.data.status),
+        subtotal,
+        tax,
+        total,
+        payment_terms: paymentTerms,
+        bill_to_address: billToAddress
+      },
+      line_items: extractLineItems(result.data)
     });
   });
 

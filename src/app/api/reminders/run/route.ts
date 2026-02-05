@@ -19,12 +19,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  let body: { subject_template?: string; body_template?: string } = {};
+  try {
+    if (request.headers.get("content-type")?.includes("application/json")) {
+      body = await request.json();
+    }
+  } catch {
+    body = {};
+  }
+
   const supabase = createServerSupabaseClient();
   const admin = createAdminSupabaseClient();
   const { data: invoices, error: invoiceError } = await admin
     .from("invoices")
     .select(
-      "id, invoice_number, amount, currency, due_date, status, clients(name, email)"
+      "id, invoice_number, amount, currency, due_date, status, source_file_path, clients(name, email)"
     )
     .eq("user_id", user.id);
   if (invoiceError) {
@@ -37,6 +46,8 @@ export async function POST(request: Request) {
 
   const resend = new Resend(process.env.RESEND_API_KEY!);
   const fromEmail = process.env.RESEND_FROM_EMAIL || "no-reply@example.com";
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "invoice_uploads";
+  const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
   const { data: settings } = await admin
     .from("users")
@@ -49,6 +60,9 @@ export async function POST(request: Request) {
     (user.user_metadata?.full_name as string | undefined) ||
     "Accounts Team";
   const companyName = settings?.company_name || "Your Company";
+  const subjectTemplate =
+    body.subject_template || settings?.reminder_subject || DEFAULT_SUBJECT;
+  const bodyTemplate = body.body_template || settings?.reminder_body || DEFAULT_BODY;
 
   const invoiceIds = invoices.map((invoice) => invoice.id);
   const { data: reminders, error: reminderError } = await admin
@@ -96,20 +110,54 @@ export async function POST(request: Request) {
       };
 
       const subject = renderTemplate(
-        settings?.reminder_subject || DEFAULT_SUBJECT,
+        subjectTemplate,
         templateData
       );
       const text = renderTemplate(
-        settings?.reminder_body || DEFAULT_BODY,
+        bodyTemplate,
         templateData
       );
+
+      let attachments:
+        | {
+            filename: string;
+            content: Buffer;
+            contentType?: string;
+          }[]
+        | undefined;
+
+      if (invoice.source_file_path && invoice.source_file_path.toLowerCase().endsWith(".pdf")) {
+        try {
+          const { data: fileData, error: fileError } = await admin.storage
+            .from(bucket)
+            .download(invoice.source_file_path);
+
+          if (!fileError && fileData) {
+            const arrayBuffer = await fileData.arrayBuffer();
+            if (arrayBuffer.byteLength <= MAX_ATTACHMENT_BYTES) {
+              const filename =
+                invoice.source_file_path.split("/").pop() || "invoice.pdf";
+              attachments = [
+                {
+                  filename,
+                  content: Buffer.from(arrayBuffer),
+                  contentType: "application/pdf"
+                }
+              ];
+            }
+          }
+        } catch {
+          attachments = undefined;
+        }
+      }
 
       const { data, error } = await resend.emails.send({
         from: `${senderName} <${fromEmail}>`,
         to: clientEmail,
         subject,
         text,
-        reply_to: settings?.reply_to || undefined
+        reply_to: settings?.reply_to || undefined,
+        attachments
       });
 
       if (error) {

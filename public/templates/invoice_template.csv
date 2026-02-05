@@ -1,0 +1,2 @@
+invoice_number,client_name,client_email,amount,currency,issue_date,due_date,status,subtotal,tax,total,payment_terms,bill_to_address,item1_desc,item1_qty,item1_unit_price,item1_line_total,item2_desc,item2_qty,item2_unit_price,item2_line_total,item3_desc,item3_qty,item3_unit_price,item3_line_total,item4_desc,item4_qty,item4_unit_price,item4_line_total,item5_desc,item5_qty,item5_unit_price,item5_line_total
+INV-4001,Acme Design,ar@acme.com,1500,USD,2026-01-10,2026-01-24,open,1400,100,1500,Net 14,"123 Market St, Denver, CO",Brand audit,1,600,600,Landing page,1,800,800,,,,,,,,,,,,

@@ -10,6 +10,34 @@ type ClientOption = {
   email: string;
 };
 
+type InitialLineItem = {
+  description: string | null;
+  quantity: number | null;
+  unit_price: number | null;
+  line_total: number | null;
+};
+
+type InitialData = {
+  client_id?: string | null;
+  client_name?: string | null;
+  client_email?: string | null;
+  invoice_number?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  issue_date?: string | null;
+  due_date?: string | null;
+  status?: "open" | "partial" | "paid" | "void" | null;
+  subtotal?: number | null;
+  tax?: number | null;
+  total?: number | null;
+  payment_terms?: string | null;
+  bill_to_address?: string | null;
+  ai_extracted?: boolean | null;
+  ai_confidence?: number | null;
+  source_file_path?: string | null;
+  line_items?: InitialLineItem[] | null;
+};
+
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
   { value: "partial", label: "Partial" },
@@ -24,19 +52,31 @@ type LineItem = {
   line_total: string;
 };
 
-export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
+export function InvoiceCreateForm({
+  clients,
+  initialData,
+  mode = "create",
+  invoiceId
+}: {
+  clients: ClientOption[];
+  initialData?: InitialData;
+  mode?: "create" | "edit";
+  invoiceId?: string;
+}) {
   const { addToast } = useToast();
   const router = useRouter();
-  const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState(
+    initialData?.client_id || ""
+  );
   const [form, setForm] = useState({
-    client_name: "",
-    client_email: "",
-    invoice_number: "",
-    amount: "",
-    currency: "USD",
-    issue_date: "",
-    due_date: "",
-    status: "open"
+    client_name: initialData?.client_name || "",
+    client_email: initialData?.client_email || "",
+    invoice_number: initialData?.invoice_number || "",
+    amount: initialData?.amount ? String(initialData.amount) : "",
+    currency: initialData?.currency || "USD",
+    issue_date: initialData?.issue_date || "",
+    due_date: initialData?.due_date || "",
+    status: initialData?.status || "open"
   });
   const [aiMeta, setAiMeta] = useState<{
     ai_extracted: boolean;
@@ -48,18 +88,25 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
     payment_terms: string;
     bill_to_address: string;
   }>({
-    ai_extracted: false,
-    ai_confidence: null,
-    source_file_path: null,
-    subtotal: "",
-    tax: "",
-    total: "",
-    payment_terms: "",
-    bill_to_address: ""
+    ai_extracted: initialData?.ai_extracted ?? false,
+    ai_confidence: initialData?.ai_confidence ?? null,
+    source_file_path: initialData?.source_file_path ?? null,
+    subtotal: initialData?.subtotal != null ? String(initialData.subtotal) : "",
+    tax: initialData?.tax != null ? String(initialData.tax) : "",
+    total: initialData?.total != null ? String(initialData.total) : "",
+    payment_terms: initialData?.payment_terms || "",
+    bill_to_address: initialData?.bill_to_address || ""
   });
-  const [lineItems, setLineItems] = useState<LineItem[]>([
-    { description: "", quantity: "", unit_price: "", line_total: "" }
-  ]);
+  const [lineItems, setLineItems] = useState<LineItem[]>(
+    initialData?.line_items && initialData.line_items.length > 0
+      ? initialData.line_items.map((item) => ({
+          description: item.description || "",
+          quantity: item.quantity != null ? String(item.quantity) : "",
+          unit_price: item.unit_price != null ? String(item.unit_price) : "",
+          line_total: item.line_total != null ? String(item.line_total) : ""
+        }))
+      : [{ description: "", quantity: "", unit_price: "", line_total: "" }]
+  );
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
 
@@ -190,6 +237,7 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
     setLoading(true);
 
     const payload = {
+      invoice_id: mode === "edit" ? invoiceId : undefined,
       client_id: selectedClientId || undefined,
       ...form,
       amount: Number(form.amount),
@@ -202,7 +250,7 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
         ai_confidence: aiMeta.ai_confidence ?? undefined,
         extracted_at: aiMeta.ai_extracted ? new Date().toISOString() : undefined,
         source_file_path: aiMeta.source_file_path || undefined,
-        line_items: lineItems
+      line_items: lineItems
         .filter((item) => item.description.trim().length > 0)
         .map((item) => ({
           description: item.description,
@@ -213,19 +261,25 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
     };
 
     try {
-      const response = await fetch("/api/invoices/create", {
+      const response = await fetch(
+        mode === "edit" ? "/api/invoices/update" : "/api/invoices/create",
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
-      });
+        }
+      );
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Unable to create invoice");
+        throw new Error(data.error || "Unable to save invoice");
       }
 
       addToast({
-        title: "Invoice saved",
-        description: "Invoice added and ready for reminders.",
+        title: mode === "edit" ? "Invoice updated" : "Invoice saved",
+        description:
+          mode === "edit"
+            ? "Invoice changes saved."
+            : "Invoice added and ready for reminders.",
         variant: "success"
       });
       router.push("/invoices");
@@ -245,7 +299,9 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
   return (
     <div className="card p-6 space-y-6">
       <div>
-        <h3 className="text-lg font-semibold">Add invoice</h3>
+        <h3 className="text-lg font-semibold">
+          {mode === "edit" ? "Edit invoice" : "Add invoice"}
+        </h3>
         <p className="text-xs text-slate-500">
           Upload a PDF to auto-fill or enter details manually.
         </p>
@@ -574,7 +630,13 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
         </div>
 
         <button className="button" type="submit" disabled={loading || parsing}>
-          {loading ? "Saving..." : parsing ? "Parsing..." : "Save invoice"}
+          {loading
+            ? "Saving..."
+            : parsing
+              ? "Parsing..."
+              : mode === "edit"
+                ? "Save changes"
+                : "Save invoice"}
         </button>
       </form>
     </div>

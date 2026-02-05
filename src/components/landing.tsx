@@ -15,6 +15,24 @@ const FEATURES = [
   }
 ];
 
+const AI_FEATURES = [
+  {
+    title: "AI invoice extraction",
+    description:
+      "Upload a PDF or image and auto-fill client, dates, totals, and line items."
+  },
+  {
+    title: "AI reminder variants",
+    description:
+      "Generate polished subject/body options and use one for a full reminder run."
+  },
+  {
+    title: "Confidence-aware review",
+    description:
+      "We show AI confidence so you know exactly what to double-check before saving."
+  }
+];
+
 const STEPS = [
   {
     step: "1",
@@ -109,6 +127,23 @@ export function Landing() {
         </div>
         <div className="grid gap-6 md:grid-cols-3">
           {FEATURES.map((feature) => (
+            <div key={feature.title} className="card p-8">
+              <h3 className="text-lg font-semibold">{feature.title}</h3>
+              <p className="text-sm text-slate-600 mt-2">{feature.description}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="ai" className="space-y-10 py-6">
+        <div>
+          <h2 className="text-3xl font-semibold">AI that saves you real time.</h2>
+          <p className="text-slate-600">
+            Let automation handle the tedious parts while you stay in control.
+          </p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-3">
+          {AI_FEATURES.map((feature) => (
             <div key={feature.title} className="card p-8">
               <h3 className="text-lg font-semibold">{feature.title}</h3>
               <p className="text-sm text-slate-600 mt-2">{feature.description}</p>

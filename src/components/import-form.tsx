@@ -46,7 +46,9 @@ export function ImportForm() {
         <p className="text-sm font-semibold text-slate-700">Upload CSV</p>
         <p className="text-xs text-slate-500">
           We auto-map common exports (QuickBooks, Xero). Required: invoice, client, email,
-          amount, due date. For PDFs/images, use the manual form on Invoices.
+          amount, due date. Optional: subtotal, tax, total, payment_terms,
+          bill_to_address. Line items: item1_desc/item1_qty/item1_unit_price/item1_line_total
+          up to item5_*. For PDFs/images, use the manual form on Invoices.
         </p>
       </div>
       <div>
@@ -62,6 +64,18 @@ export function ImportForm() {
           required
           disabled={loading}
         />
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <a
+          className="button-secondary"
+          href="/templates/invoice_template.csv"
+          download
+        >
+          Download CSV template
+        </a>
+        <p className="text-xs text-slate-500">
+          Includes line item columns (up to 5) and optional totals.
+        </p>
       </div>
       <button className="button" type="submit" disabled={loading}>
         {loading ? "Importing..." : "Import CSV"}

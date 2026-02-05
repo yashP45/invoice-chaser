@@ -1,0 +1,4 @@
+invoice_number,client_name,client_email,amount,currency,issue_date,due_date,status,subtotal,tax,total,payment_terms,bill_to_address,item1_desc,item1_qty,item1_unit_price,item1_line_total,item2_desc,item2_qty,item2_unit_price,item2_line_total,item3_desc,item3_qty,item3_unit_price,item3_line_total
+INV-3001,Acme Design,ar@acme.com,1500,USD,2026-01-10,2026-01-24,open,1400,100,1500,Net 14,"123 Market St, Denver, CO",Brand audit,1,600,600,Landing page,1,800,800,,
+INV-3002,Bluehill Media,billing@bluehill.com,980,USD,2026-01-05,2026-01-20,partial,900,80,980,Net 15,"55 Pine Ave, Austin, TX",Content package,2,300,600,Email campaign,1,300,300,Analytics setup,1,80,80
+INV-3003,Northwind Studio,accounts@northwind.com,600,USD,2026-01-02,2026-01-16,open,600,0,600,Due on receipt,"88 Lake Rd, Seattle, WA",Logo refinement,1,600,600,,,,
