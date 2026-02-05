@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
 import { updateUserSettings } from "@/lib/actions";
 import { DEFAULT_BODY, DEFAULT_SUBJECT, renderTemplate } from "@/lib/email/templates";
+import { LoadingButton } from "@/components/loading-button";
 
 export const dynamic = "force-dynamic";
 
@@ -126,9 +127,9 @@ export default async function SettingsPage() {
           </pre>
         </div>
 
-        <button className="button" type="submit">
+        <LoadingButton className="button" pendingText="Saving...">
           Save settings
-        </button>
+        </LoadingButton>
       </form>
     </div>
   );

@@ -60,6 +60,7 @@ export function ImportForm() {
           name="file"
           accept=".csv"
           required
+          disabled={loading}
         />
       </div>
       <button className="button" type="submit" disabled={loading}>

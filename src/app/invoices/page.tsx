@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
 import { daysOverdue, formatDate } from "@/lib/utils/date";
+import Link from "next/link";
 import { deleteInvoice, updateInvoiceStatus } from "@/lib/actions";
 import { StatusBadge } from "@/components/status-badge";
-import { InvoiceCreateForm } from "@/components/invoice-create-form";
-import { ConfirmButton } from "@/components/confirm-button";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { LoadingButton } from "@/components/loading-button";
 
 export const dynamic = "force-dynamic";
 
@@ -21,22 +22,22 @@ export default async function InvoicesPage() {
     .eq("user_id", user.id)
     .order("due_date", { ascending: true });
 
-  const { data: clients } = await supabase
-    .from("clients")
-    .select("id, name, email")
-    .eq("user_id", user.id)
-    .order("name");
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Invoices</h1>
-        <p className="text-sm text-slate-600">
-          Track status and days overdue.
-        </p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Invoices</h1>
+          <p className="text-sm text-slate-600">Track status and days overdue.</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Link className="button" href="/invoices/new">
+            Add invoice
+          </Link>
+          <Link className="button-secondary" href="/imports">
+            Import CSV
+          </Link>
+        </div>
       </div>
-
-      <InvoiceCreateForm clients={clients || []} />
 
       <div className="card p-6">
         {invoices && invoices.length > 0 ? (
@@ -94,28 +95,42 @@ export default async function InvoicesPage() {
                   <td>
                     <form action={updateInvoiceStatus} className="flex gap-2">
                       <input type="hidden" name="invoice_id" value={invoice.id} />
-                      <button className="button-secondary" name="status" value="open">
+                      <LoadingButton
+                        className="button-secondary"
+                        pendingText="Updating..."
+                        name="status"
+                        value="open"
+                      >
                         Open
-                      </button>
-                      <button className="button-secondary" name="status" value="partial">
+                      </LoadingButton>
+                      <LoadingButton
+                        className="button-secondary"
+                        pendingText="Updating..."
+                        name="status"
+                        value="partial"
+                      >
                         Partial
-                      </button>
-                      <button className="button-secondary" name="status" value="paid">
+                      </LoadingButton>
+                      <LoadingButton
+                        className="button-secondary"
+                        pendingText="Updating..."
+                        name="status"
+                        value="paid"
+                      >
                         Paid
-                      </button>
+                      </LoadingButton>
                     </form>
                   </td>
                   <td>
-                    <form className="flex justify-start">
-                      <input type="hidden" name="invoice_id" value={invoice.id} />
-                      <ConfirmButton
-                        formAction={deleteInvoice}
-                        confirmText={`Delete invoice ${invoice.invoice_number}?`}
-                        className="button-danger"
-                      >
-                        Delete
-                      </ConfirmButton>
-                    </form>
+                    <ConfirmDialog
+                      title={`Delete invoice ${invoice.invoice_number}?`}
+                      description="This will remove the invoice and its reminder history."
+                      triggerLabel="Delete"
+                      confirmLabel="Delete invoice"
+                      triggerClassName="button-danger"
+                      formAction={deleteInvoice}
+                      hiddenFields={{ invoice_id: invoice.id }}
+                    />
                   </td>
                 </tr>
               ))}
@@ -125,7 +140,7 @@ export default async function InvoicesPage() {
           <div className="space-y-2">
             <p className="text-sm font-semibold text-slate-700">No invoices yet</p>
             <p className="text-sm text-slate-500">
-              Import a CSV on the dashboard to see invoices here.
+              Import a CSV or add an invoice manually to get started.
             </p>
           </div>
         )}

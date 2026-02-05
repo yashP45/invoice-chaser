@@ -228,30 +228,9 @@ export function InvoiceCreateForm({ clients }: { clients: ClientOption[] }) {
         description: "Invoice added and ready for reminders.",
         variant: "success"
       });
+      router.push("/invoices");
       router.refresh();
-
-      setForm({
-        client_name: "",
-        client_email: "",
-        invoice_number: "",
-        amount: "",
-        currency: "USD",
-        issue_date: "",
-        due_date: "",
-        status: "open"
-      });
-      setAiMeta({
-        ai_extracted: false,
-        ai_confidence: null,
-        source_file_path: null,
-        subtotal: "",
-        tax: "",
-        total: "",
-        payment_terms: "",
-        bill_to_address: ""
-      });
-      setLineItems([{ description: "", quantity: "", unit_price: "", line_total: "" }]);
-      setSelectedClientId("");
+      return;
     } catch (error) {
       addToast({
         title: "Save failed",

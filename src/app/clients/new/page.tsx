@@ -2,8 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/supabase/server";
 import { createClient } from "@/lib/actions";
+import { LoadingButton } from "@/components/loading-button";
 
 export const dynamic = "force-dynamic";
+
+async function createClientAndRedirect(formData: FormData) {
+  "use server";
+  await createClient(formData);
+  redirect("/clients");
+}
 
 export default async function NewClientPage() {
   const user = await getUser();
@@ -21,7 +28,7 @@ export default async function NewClientPage() {
         </Link>
       </div>
 
-      <form action={createClient} className="card p-6 space-y-4">
+      <form action={createClientAndRedirect} className="card p-6 space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="label" htmlFor="new-client-name">
@@ -42,9 +49,9 @@ export default async function NewClientPage() {
             />
           </div>
         </div>
-        <button className="button" type="submit">
+        <LoadingButton className="button" pendingText="Saving...">
           Add client
-        </button>
+        </LoadingButton>
       </form>
     </div>
   );

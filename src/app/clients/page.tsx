@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
-import { createClient, deleteClient, updateClientEmail } from "@/lib/actions";
-import { ConfirmButton } from "@/components/confirm-button";
+import Link from "next/link";
+import { deleteClient } from "@/lib/actions";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -19,91 +19,63 @@ export default async function ClientsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Clients</h1>
-        <p className="text-sm text-slate-600">
-          Keep client contact emails up to date.
-        </p>
-      </div>
-
-      <form action={createClient} className="card p-6 space-y-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Add client</h2>
-          <p className="text-xs text-slate-500">
-            Create a client profile to avoid duplicates when adding invoices.
+          <h1 className="text-2xl font-semibold">Clients</h1>
+          <p className="text-sm text-slate-600">
+            Keep client contact emails up to date.
           </p>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="new-client-name">
-              Client name
-            </label>
-            <input
-              id="new-client-name"
-              name="name"
-              className="input mt-1"
-              required
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="new-client-email">
-              Client email
-            </label>
-            <input
-              id="new-client-email"
-              type="email"
-              name="email"
-              className="input mt-1"
-              required
-            />
-          </div>
-        </div>
-        <button className="button" type="submit">
+        <Link className="button" href="/clients/new">
           Add client
-        </button>
-      </form>
+        </Link>
+      </div>
 
       <div className="card p-6">
         {clients && clients.length > 0 ? (
-          <div className="space-y-4">
-            {clients.map((client) => (
-              <form
-                key={client.id}
-                action={updateClientEmail}
-                className="flex flex-col gap-3 border-b border-slate-100 pb-4 md:flex-row md:items-center md:gap-4"
-              >
-                <input type="hidden" name="client_id" value={client.id} />
-                <div className="md:w-1/3 font-semibold text-slate-700">
-                  {client.name}
-                  <Link
-                    href={`/clients/${client.id}`}
-                    className="ml-2 text-xs font-semibold text-slate-500 underline"
-                  >
-                    View timeline
-                  </Link>
-                </div>
-                <input
-                  className="input md:w-1/2"
-                  type="email"
-                  name="email"
-                  defaultValue={client.email}
-                  required
-                />
-                <div className="flex gap-2">
-                  <button className="button-secondary" type="submit">
-                    Save
-                  </button>
-                  <ConfirmButton
-                    formAction={deleteClient}
-                    confirmText={`Delete ${client.name} and all invoices?`}
-                    className="button-danger"
-                  >
-                    Delete
-                  </ConfirmButton>
-                </div>
-              </form>
-            ))}
-          </div>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Email</th>
+                <th>Timeline</th>
+                <th>Edit</th>
+                <th>Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clients.map((client) => (
+                <tr key={client.id}>
+                  <td className="font-semibold text-slate-700">{client.name}</td>
+                  <td>{client.email}</td>
+                  <td>
+                    <Link
+                      href={`/clients/${client.id}`}
+                      className="text-xs font-semibold text-slate-500 underline"
+                    >
+                      View
+                    </Link>
+                  </td>
+                  <td>
+                    <Link className="button-secondary" href={`/clients/${client.id}/edit`}>
+                      Edit
+                    </Link>
+                  </td>
+                  <td>
+                    <ConfirmDialog
+                      title={`Delete ${client.name}?`}
+                      description="This will remove the client and all associated invoices."
+                      triggerLabel="Delete"
+                      confirmLabel="Delete client"
+                      triggerClassName="button-danger"
+                      formAction={deleteClient}
+                      hiddenFields={{ client_id: client.id }}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         ) : (
           <div className="space-y-2">
             <p className="text-sm font-semibold text-slate-700">No clients yet</p>

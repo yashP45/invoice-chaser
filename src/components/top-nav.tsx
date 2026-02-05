@@ -13,37 +13,38 @@ export async function TopNav() {
           <div className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
             <div className="hidden items-center gap-3 md:flex">
               <Link href="/" className="text-lg font-semibold text-ink">
-              <span className="flex items-center gap-3">
-                <img
-                  src="/logo-mark.svg"
-                  alt=""
-                  aria-hidden="true"
-                  className="h-8 w-8"
-                />
-                <span>Invoice Chaser</span>
-              </span>
-            </Link>
-          </div>
-          <nav className="hidden items-center justify-center gap-6 text-sm font-semibold text-slate-600 md:flex">
-            {user ? (
-              <>
-                <Link href="/">Dashboard</Link>
-                <Link href="/invoices">Invoices</Link>
-                <Link href="/clients">Clients</Link>
-                <Link href="/reminders">Reminders</Link>
-                <Link href="/settings">Settings</Link>
-              </>
-            ) : (
-              <>
-                <Link href="/#features">Features</Link>
-                <Link href="/#workflow">Workflow</Link>
-                <Link href="/#pricing">Pricing</Link>
-              </>
-            )}
-          </nav>
-          <div className="flex items-center justify-between gap-3 md:justify-end">
-            <Link href="/" className="text-lg font-semibold text-ink md:hidden">
-              <span className="flex items-center gap-2">
+                <span className="flex items-center gap-3">
+                  <img
+                    src="/logo-mark.svg"
+                    alt=""
+                    aria-hidden="true"
+                    className="h-8 w-8"
+                  />
+                  <span>Invoice Chaser</span>
+                </span>
+              </Link>
+            </div>
+            <nav className="hidden items-center justify-center gap-6 text-sm font-semibold text-slate-600 md:flex">
+              {user ? (
+                <>
+                  <Link href="/">Dashboard</Link>
+                  <Link href="/invoices">Invoices</Link>
+                  <Link href="/imports">Imports</Link>
+                  <Link href="/clients">Clients</Link>
+                  <Link href="/reminders">Reminders</Link>
+                  <Link href="/settings">Settings</Link>
+                </>
+              ) : (
+                <>
+                  <Link href="/#features">Features</Link>
+                  <Link href="/#workflow">Workflow</Link>
+                  <Link href="/#pricing">Pricing</Link>
+                </>
+              )}
+            </nav>
+            <div className="flex items-center justify-between gap-3 md:justify-end">
+              <Link href="/" className="text-lg font-semibold text-ink md:hidden">
+                <span className="flex items-center gap-2">
                 <img
                   src="/logo-mark.svg"
                   alt=""

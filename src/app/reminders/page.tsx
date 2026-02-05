@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/utils/date";
 import { deleteReminder } from "@/lib/actions";
-import { ConfirmButton } from "@/components/confirm-button";
 import { ReminderStatusBadge } from "@/components/reminder-status-badge";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { RunReminders } from "@/components/run-reminders";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export default async function RemindersPage() {
           Track reminders sent and their status.
         </p>
       </div>
+      <RunReminders />
       <div className="card p-6">
         {reminders && reminders.length > 0 ? (
           <table className="table">
@@ -76,16 +78,15 @@ export default async function RemindersPage() {
                     )}
                   </td>
                   <td>
-                    <form className="flex justify-start">
-                      <input type="hidden" name="reminder_id" value={reminder.id} />
-                      <ConfirmButton
-                        formAction={deleteReminder}
-                        confirmText="Delete this reminder log entry?"
-                        className="button-danger"
-                      >
-                        Delete
-                      </ConfirmButton>
-                    </form>
+                    <ConfirmDialog
+                      title="Delete this reminder log entry?"
+                      description="This will remove the reminder history item."
+                      triggerLabel="Delete"
+                      confirmLabel="Delete reminder"
+                      triggerClassName="button-danger"
+                      formAction={deleteReminder}
+                      hiddenFields={{ reminder_id: reminder.id }}
+                    />
                   </td>
                 </tr>
               ))}
