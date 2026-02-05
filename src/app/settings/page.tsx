@@ -10,7 +10,7 @@ export default async function SettingsPage() {
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: settings } = await supabase
     .from("users")
     .select("company_name, sender_name, reply_to, reminder_subject, reminder_body")

@@ -20,7 +20,7 @@ export default async function ClientsPage({
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: clients, count } = await supabase
     .from("clients")
     .select("id, name, email", { count: "exact" })

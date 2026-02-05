@@ -24,7 +24,7 @@ export default async function InvoicesPage({
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: invoices, count } = await supabase
     .from("invoices")
     .select(

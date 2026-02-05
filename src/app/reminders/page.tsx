@@ -22,7 +22,7 @@ export default async function RemindersPage({
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: reminders, count } = await supabase
     .from("reminders")
     .select(

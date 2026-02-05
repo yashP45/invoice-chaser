@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     body = {};
   }
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const admin = createAdminSupabaseClient();
   const { data: invoices, error: invoiceError } = await admin
     .from("invoices")

@@ -13,7 +13,7 @@ export default async function ReminderVariantsPage({
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: invoices } = await supabase
     .from("invoices")
     .select("id, invoice_number, clients(name)")

@@ -20,7 +20,7 @@ export default async function EditClientPage({
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: client } = await supabase
     .from("clients")
     .select("id, name, email")

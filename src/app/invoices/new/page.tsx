@@ -9,7 +9,7 @@ export default async function NewInvoicePage() {
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: clients } = await supabase
     .from("clients")
     .select("id, name, email")

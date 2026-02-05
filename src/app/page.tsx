@@ -12,7 +12,7 @@ export default async function DashboardPage() {
     return <Landing />;
   }
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: invoices } = await supabase
     .from("invoices")
     .select(

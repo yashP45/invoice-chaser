@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
+import { getUser } from "@/lib/supabase/server";
 import { parseInvoiceCsv } from "@/lib/utils/csv";
 
 export const runtime = "nodejs";
@@ -29,7 +29,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No rows found" }, { status: 400 });
   }
 
-  const supabase = createServerSupabaseClient();
   const admin = createAdminSupabaseClient();
 
   await admin.from("users").upsert({

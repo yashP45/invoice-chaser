@@ -13,7 +13,7 @@ export default async function EditInvoicePage({
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   const { data: invoice } = await supabase
     .from("invoices")
