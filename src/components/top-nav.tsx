@@ -55,6 +55,13 @@ export async function TopNav() {
               </span>
             </Link>
             <div className="flex items-center gap-3">
+              <a
+                className="button-secondary-sm"
+                href="/downloads/invoice-chaser-samples.zip"
+                download
+              >
+                Download samples
+              </a>
               {user ? (
                 <>
                   <span className="hidden rounded-full border border-slate-200/70 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-500 lg:inline-flex">
