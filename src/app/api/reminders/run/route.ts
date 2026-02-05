@@ -5,6 +5,7 @@ import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
 import { daysOverdue, formatDate } from "@/lib/utils/date";
 import { reminderStage } from "@/lib/reminders";
 import { DEFAULT_BODY, DEFAULT_SUBJECT, renderTemplate } from "@/lib/email/templates";
+import { getRequestIp, rateLimit } from "@/lib/utils/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,16 @@ export async function POST(request: Request) {
   const user = await getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const ip = getRequestIp(request) || "unknown";
+  const limit = rateLimit(`reminders-run:${user.id}:${ip}`, { windowMs: 60_000, max: 10 });
+  if (!limit.allowed) {
+    const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
+    return NextResponse.json(
+      { error: "Too many reminder runs. Please wait a moment.", retry_after: retryAfter },
+      { status: 429 }
+    );
   }
 
   let body: { subject_template?: string; body_template?: string } = {};
