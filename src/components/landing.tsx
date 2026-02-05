@@ -176,7 +176,7 @@ export function Landing() {
           ))}
         </div>
       </section>
-
+{/* 
       <section id="testimonials" className="space-y-10 py-6">
         <div>
           <h2 className="text-3xl font-semibold">Trusted by cash-flow conscious teams.</h2>
@@ -195,7 +195,7 @@ export function Landing() {
             </div>
           ))}
         </div>
-      </section>
+      </section> */}
 
       <section id="pricing" className="card p-10 text-center">
         <h2 className="text-3xl font-semibold">MVP pricing: free for now.</h2>
