@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
 import { updateUserSettings } from "@/lib/actions";
-import { DEFAULT_BODY, DEFAULT_SUBJECT, renderTemplate } from "@/lib/email/templates";
-import { LoadingButton } from "@/components/loading-button";
+import { DEFAULT_BODY, DEFAULT_SUBJECT, BUILTIN_TOKEN_KEYS } from "@/lib/email/templates";
+import { listTokens } from "@/lib/email/template-schema";
+import { SettingsForm } from "@/components/settings-form";
 
 export const dynamic = "force-dynamic";
 
@@ -13,28 +14,15 @@ export default async function SettingsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: settings } = await supabase
     .from("users")
-    .select("company_name, sender_name, reply_to, reminder_subject, reminder_body")
+    .select("company_name, sender_name, reply_to, reminder_subject, reminder_body, custom_template_fields")
     .eq("id", user.id)
     .maybeSingle();
 
-  const previewData = {
-    client_name: "Bluehill Media",
-    invoice_number: "INV-2401",
-    amount: "USD 1,250.00",
-    due_date: "Jan 15, 2026",
-    days_overdue: 14,
-    sender_name: settings?.sender_name || user.user_metadata?.full_name || "Accounts",
-    company_name: settings?.company_name || "Your Company"
-  };
-
-  const previewSubject = renderTemplate(
-    settings?.reminder_subject || DEFAULT_SUBJECT,
-    previewData
-  );
-  const previewBody = renderTemplate(
-    settings?.reminder_body || DEFAULT_BODY,
-    previewData
-  );
+  const defaultSubject = settings?.reminder_subject ?? DEFAULT_SUBJECT;
+  const defaultBody = settings?.reminder_body ?? DEFAULT_BODY;
+  const { builtin, custom } = listTokens(defaultSubject, defaultBody, BUILTIN_TOKEN_KEYS);
+  const builtinTokensList = builtin.map((k) => `{{${k}}}`).join(", ");
+  const customTokensList = custom.length ? custom.map((k) => `{{${k}}}`).join(", ") : null;
 
   return (
     <div className="space-y-6">
@@ -45,92 +33,18 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      <form action={updateUserSettings} className="card space-y-6 p-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="company_name">
-              Company name
-            </label>
-            <input
-              id="company_name"
-              name="company_name"
-              className="input mt-1"
-              defaultValue={settings?.company_name || ""}
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="sender_name">
-              Sender name
-            </label>
-            <input
-              id="sender_name"
-              name="sender_name"
-              className="input mt-1"
-              defaultValue={settings?.sender_name || ""}
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="reply_to">
-              Reply-to email
-            </label>
-            <input
-              id="reply_to"
-              name="reply_to"
-              className="input mt-1"
-              type="email"
-              defaultValue={settings?.reply_to || ""}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="label" htmlFor="reminder_subject">
-            Reminder subject
-          </label>
-          <input
-            id="reminder_subject"
-            name="reminder_subject"
-            className="input mt-1"
-            defaultValue={settings?.reminder_subject || DEFAULT_SUBJECT}
-          />
-        </div>
-
-        <div>
-          <label className="label" htmlFor="reminder_body">
-            Reminder body
-          </label>
-          <textarea
-            id="reminder_body"
-            name="reminder_body"
-            className="input mt-1 min-h-[220px]"
-            defaultValue={settings?.reminder_body || DEFAULT_BODY}
-          />
-          <p className="mt-2 text-xs text-slate-500">
-            Available tokens:{" "}
-            <code className="font-semibold text-slate-600">{`{{client_name}}`}</code>,{" "}
-            <code className="font-semibold text-slate-600">{`{{invoice_number}}`}</code>,{" "}
-            <code className="font-semibold text-slate-600">{`{{amount}}`}</code>,{" "}
-            <code className="font-semibold text-slate-600">{`{{due_date}}`}</code>,{" "}
-            <code className="font-semibold text-slate-600">{`{{days_overdue}}`}</code>,{" "}
-            <code className="font-semibold text-slate-600">{`{{sender_name}}`}</code>,{" "}
-            <code className="font-semibold text-slate-600">{`{{company_name}}`}</code>.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/70 bg-white/80 p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Preview
-          </p>
-          <p className="mt-2 text-sm font-semibold text-slate-700">{previewSubject}</p>
-          <pre className="mt-3 whitespace-pre-wrap text-sm text-slate-600">
-            {previewBody}
-          </pre>
-        </div>
-
-        <LoadingButton className="button" pendingText="Saving...">
-          Save settings
-        </LoadingButton>
-      </form>
+      <SettingsForm
+        action={updateUserSettings}
+        defaultSubject={defaultSubject}
+        defaultBody={defaultBody}
+        companyName={settings?.company_name ?? undefined}
+        senderName={settings?.sender_name ?? undefined}
+        companyNameDefault={settings?.company_name ?? ""}
+        senderNameDefault={settings?.sender_name ?? ""}
+        replyToDefault={settings?.reply_to ?? ""}
+        builtinTokensList={builtinTokensList}
+        customTokensList={customTokensList}
+      />
     </div>
   );
 }

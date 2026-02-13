@@ -4,8 +4,11 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
 import { daysOverdue, formatDate } from "@/lib/utils/date";
 import { reminderStage } from "@/lib/reminders";
-import { DEFAULT_BODY, DEFAULT_SUBJECT, renderTemplate } from "@/lib/email/templates";
+import { DEFAULT_BODY, DEFAULT_SUBJECT, renderTemplate, BUILTIN_TOKEN_KEYS } from "@/lib/email/templates";
 import { getRequestIp, rateLimit } from "@/lib/utils/rate-limit";
+import { generateInvoicePdf } from "@/lib/pdf/generate-invoice-pdf";
+import { extractTokens } from "@/lib/email/template-schema";
+import { resolveTokensBatch, isLowConfidence } from "@/lib/email/resolve-token-with-ai";
 
 export const runtime = "nodejs";
 
@@ -44,7 +47,7 @@ export async function POST(request: Request) {
   const { data: invoices, error: invoiceError } = await admin
     .from("invoices")
     .select(
-      "id, invoice_number, amount, currency, due_date, status, source_file_path, clients(name, email)"
+      "id, invoice_number, amount, currency, due_date, issue_date, status, source_file_path, subtotal, tax, total, payment_terms, bill_to_address, clients(name, email)"
     )
     .eq("user_id", user.id);
   if (invoiceError) {
@@ -55,14 +58,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ sent: 0, failed: 0 });
   }
 
+  // Batch fetch line items for all invoices
+  const invoiceIds = invoices.map((invoice) => invoice.id);
+  const { data: allLineItems } = await admin
+    .from("invoice_line_items")
+    .select("invoice_id, description, quantity, unit_price, line_total, position")
+    .in("invoice_id", invoiceIds)
+    .order("invoice_id", { ascending: true })
+    .order("position", { ascending: true });
+
+  // Group line items by invoice_id
+  const lineItemsByInvoice = new Map<string, typeof allLineItems>();
+  allLineItems?.forEach((item) => {
+    const items = lineItemsByInvoice.get(item.invoice_id) || [];
+    items.push(item);
+    lineItemsByInvoice.set(item.invoice_id, items);
+  });
+
   const resend = new Resend(process.env.RESEND_API_KEY!);
   const fromEmail = process.env.RESEND_FROM_EMAIL || "no-reply@example.com";
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "invoice_uploads";
   const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
   const { data: settings } = await admin
     .from("users")
-    .select("company_name, sender_name, reply_to, reminder_subject, reminder_body")
+    .select("company_name, sender_name, reply_to, reminder_subject, reminder_body, custom_template_fields")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -75,7 +94,12 @@ export async function POST(request: Request) {
     body.subject_template || settings?.reminder_subject || DEFAULT_SUBJECT;
   const bodyTemplate = body.body_template || settings?.reminder_body || DEFAULT_BODY;
 
-  const invoiceIds = invoices.map((invoice) => invoice.id);
+  const allTokenKeys = [
+    ...new Set([...extractTokens(subjectTemplate), ...extractTokens(bodyTemplate)])
+  ];
+  const builtinSet = new Set(BUILTIN_TOKEN_KEYS);
+  const customTokenKeys = allTokenKeys.filter((k) => !builtinSet.has(k));
+
   const { data: reminders, error: reminderError } = await admin
     .from("reminders")
     .select("invoice_id, reminder_stage, status")
@@ -110,7 +134,7 @@ export async function POST(request: Request) {
     if (!clientEmail) continue;
 
     try {
-      const templateData = {
+      const builtinData: Record<string, string | number> = {
         client_name: client?.name || "there",
         invoice_number: invoice.invoice_number,
         amount: `${invoice.currency || "USD"} ${Number(invoice.amount).toFixed(2)}`,
@@ -120,15 +144,44 @@ export async function POST(request: Request) {
         company_name: companyName
       };
 
-      const subject = renderTemplate(
-        subjectTemplate,
-        templateData
-      );
-      const text = renderTemplate(
-        bodyTemplate,
-        templateData
-      );
+      let customValues: Record<string, string> = {};
+      if (customTokenKeys.length > 0) {
+        const lineItems = lineItemsByInvoice.get(invoice.id) || [];
+        const invoiceDataForAi = {
+          invoice_number: invoice.invoice_number,
+          amount: Number(invoice.amount),
+          currency: invoice.currency ?? undefined,
+          due_date: invoice.due_date ?? undefined,
+          issue_date: invoice.issue_date ?? undefined,
+          payment_terms: invoice.payment_terms ?? undefined,
+          bill_to_address: invoice.bill_to_address ?? undefined,
+          client_name: client?.name ?? undefined,
+          client_email: client?.email ?? undefined,
+          line_items: lineItems.map((item) => ({
+            description: item.description ?? undefined,
+            quantity: item.quantity ?? undefined,
+            unit_price: item.unit_price ?? undefined,
+            line_total: item.line_total ?? undefined
+          }))
+        };
+        const batchResults = await resolveTokensBatch(customTokenKeys, invoiceDataForAi);
+        customValues = Object.fromEntries(
+          batchResults.map((r) => [
+            r.key,
+            isLowConfidence(r.confidence) ? "" : (r.value || "")
+          ])
+        );
+      }
 
+      const templateData: Record<string, string | number> = {
+        ...builtinData,
+        ...customValues
+      };
+
+      const subject = renderTemplate(subjectTemplate, templateData);
+      const text = renderTemplate(bodyTemplate, templateData);
+
+      // Always attach generated invoice PDF (never original upload)
       let attachments:
         | {
             filename: string;
@@ -137,29 +190,45 @@ export async function POST(request: Request) {
           }[]
         | undefined;
 
-      if (invoice.source_file_path && invoice.source_file_path.toLowerCase().endsWith(".pdf")) {
-        try {
-          const { data: fileData, error: fileError } = await admin.storage
-            .from(bucket)
-            .download(invoice.source_file_path);
-
-          if (!fileError && fileData) {
-            const arrayBuffer = await fileData.arrayBuffer();
-            if (arrayBuffer.byteLength <= MAX_ATTACHMENT_BYTES) {
-              const filename =
-                invoice.source_file_path.split("/").pop() || "invoice.pdf";
-              attachments = [
-                {
-                  filename,
-                  content: Buffer.from(arrayBuffer),
-                  contentType: "application/pdf"
-                }
-              ];
-            }
+      try {
+        const lineItems = lineItemsByInvoice.get(invoice.id) || [];
+        const pdfBuffer = await generateInvoicePdf(
+          {
+            invoiceNumber: invoice.invoice_number,
+            clientName: client?.name || "Client",
+            clientEmail: client?.email,
+            clientAddress: invoice.bill_to_address || undefined,
+            issueDate: invoice.issue_date || undefined,
+            dueDate: invoice.due_date,
+            paymentTerms: invoice.payment_terms || undefined,
+            currency: invoice.currency || "USD",
+            subtotal: invoice.subtotal ?? undefined,
+            tax: invoice.tax ?? undefined,
+            total: Number(invoice.amount),
+            lineItems: lineItems.map((item) => ({
+              description: item.description || "",
+              quantity: item.quantity ?? undefined,
+              unitPrice: item.unit_price ?? undefined,
+              lineTotal: item.line_total ?? undefined
+            }))
+          },
+          {
+            companyName,
+            senderName
           }
-        } catch {
-          attachments = undefined;
+        );
+
+        if (pdfBuffer.length <= MAX_ATTACHMENT_BYTES) {
+          attachments = [
+            {
+              filename: `Invoice-${invoice.invoice_number}.pdf`,
+              content: pdfBuffer,
+              contentType: "application/pdf"
+            }
+          ];
         }
+      } catch (error) {
+        console.error(`Failed to generate PDF for invoice ${invoice.id}:`, error);
       }
 
       const { data, error } = await resend.emails.send({

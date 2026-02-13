@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getUser } from "@/lib/supabase/server";
-import { reminderVariantSchema } from "@/lib/ai/schemas";
+import { reminderVariantSchema, ReminderVariantsZod } from "@/lib/ai/schemas";
 
 export const runtime = "nodejs";
 
@@ -119,5 +119,40 @@ export async function POST(request: Request) {
   }
 
   const outputText = extractResponseText(data);
-  return NextResponse.json(JSON.parse(outputText));
+  if (!outputText) {
+    return NextResponse.json(
+      { error: "AI response contained no output text" },
+      { status: 422 }
+    );
+  }
+
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(outputText);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: "Failed to parse AI response as JSON",
+        details: error instanceof Error ? error.message : "Unknown parsing error"
+      },
+      { status: 422 }
+    );
+  }
+
+  const validationResult = ReminderVariantsZod.safeParse(parsedJson);
+  if (!validationResult.success) {
+    const issues = validationResult.error.issues.map((issue) => ({
+      path: issue.path.join("."),
+      message: issue.message
+    }));
+    return NextResponse.json(
+      {
+        error: "AI response validation failed",
+        details: issues
+      },
+      { status: 422 }
+    );
+  }
+
+  return NextResponse.json(validationResult.data);
 }

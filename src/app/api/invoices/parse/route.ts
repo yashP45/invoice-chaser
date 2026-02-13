@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getUser } from "@/lib/supabase/server";
-import { invoiceExtractionSchema } from "@/lib/ai/schemas";
+import { invoiceExtractionSchema, InvoiceExtractionZod } from "@/lib/ai/schemas";
 
 export const runtime = "nodejs";
 
@@ -171,7 +171,28 @@ async function parseWithOpenAI(file: File) {
 
   const outputText = extractResponseText(responseData);
   if (!outputText) return null;
-  return JSON.parse(outputText);
+
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(outputText);
+  } catch (error) {
+    throw new Error(
+      `Failed to parse AI response as JSON: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
+
+  const validationResult = InvoiceExtractionZod.safeParse(parsedJson);
+  if (!validationResult.success) {
+    const issues = validationResult.error.issues.map((issue) => ({
+      path: issue.path.join("."),
+      message: issue.message
+    }));
+    throw new Error(
+      `AI extraction validation failed: ${JSON.stringify(issues)}`
+    );
+  }
+
+  return validationResult.data;
 }
 
 export async function POST(request: Request) {
@@ -212,9 +233,18 @@ export async function POST(request: Request) {
   let aiPayload: AiInvoicePayload | null = null;
   let aiError: string | null = null;
   try {
-    aiPayload = await parseWithOpenAI(file);
+    const validatedPayload = await parseWithOpenAI(file);
+    if (validatedPayload) {
+      aiPayload = validatedPayload as AiInvoicePayload;
+    }
   } catch (error) {
-    aiError = error instanceof Error ? error.message : "AI extraction failed";
+    if (error instanceof Error) {
+      aiError = error.message;
+      console.error("AI extraction error:", error.message);
+    } else {
+      aiError = "AI extraction failed with unknown error";
+      console.error("AI extraction unknown error:", error);
+    }
   }
 
   if (aiPayload) {

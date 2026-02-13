@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export const invoiceExtractionSchema = {
   name: "invoice_extraction",
   strict: true,
@@ -73,3 +75,36 @@ export const reminderVariantSchema = {
     required: ["variants"]
   }
 } as const;
+
+// Zod schemas for runtime validation
+const LineItemZod = z.object({
+  description: z.string(),
+  quantity: z.coerce.number(),
+  unit_price: z.coerce.number(),
+  line_total: z.coerce.number()
+});
+
+export const InvoiceExtractionZod = z.object({
+  client_name: z.string().default(""),
+  client_email: z.string().default(""),
+  client_address: z.string().default(""),
+  invoice_number: z.string().default(""),
+  invoice_date: z.string().default(""),
+  due_date: z.string().default(""),
+  payment_terms: z.string().default(""),
+  currency: z.string().default("USD"),
+  subtotal: z.coerce.number(),
+  tax: z.coerce.number(),
+  total: z.coerce.number(),
+  line_items: z.array(LineItemZod).default([]),
+  confidence: z.coerce.number().min(0).max(1)
+});
+
+export const ReminderVariantsZod = z.object({
+  variants: z.array(
+    z.object({
+      subject: z.string(),
+      body: z.string()
+    })
+  )
+});

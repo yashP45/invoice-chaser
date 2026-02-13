@@ -4,7 +4,8 @@ const nextConfig = {
     serverActions: {
       allowedOrigins: []
     }
-  }
+  },
+  serverExternalPackages: ["pdfkit"]
 };
 
 export default nextConfig;

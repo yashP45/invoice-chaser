@@ -11,14 +11,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Failed to parse form data", details: error instanceof Error ? error.message : "Unknown error" },
+      { status: 400 }
+    );
+  }
+
   const file = formData.get("file");
 
   if (!file || !(file instanceof File)) {
     return NextResponse.json({ error: "CSV file required" }, { status: 400 });
   }
 
-  const text = await file.text();
+  let text: string;
+  try {
+    text = await file.text();
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Failed to read file", details: error instanceof Error ? error.message : "Unknown error" },
+      { status: 400 }
+    );
+  }
+
   const { rows, errors } = parseInvoiceCsv(text);
 
   if (errors.length) {
