@@ -104,7 +104,7 @@ export function isLowConfidence(confidence: number): boolean {
 }
 
 /**
- * @deprecated Use resolveTokensBatch for one call per request. Kept for fallback.
+ * @deprecated 
  */
 export async function resolveTokenWithAi(
   tokenKey: string,
@@ -115,9 +115,7 @@ export async function resolveTokenWithAi(
   return r ? r.value : "";
 }
 
-/**
- * Resolve multiple custom tokens (uses batch internally; returns flat map for backward compatibility).
- */
+
 export async function resolveTokensWithAi(
   tokenKeys: string[],
   invoiceData: InvoiceDataForResolver

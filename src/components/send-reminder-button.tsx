@@ -260,7 +260,7 @@ export function SendReminderButton({ invoiceId, disabled, className, label }: Pr
             }
           }}
         >
-          <div className="card w-full max-w-lg p-6 my-auto flex flex-col max-h-[90vh] relative z-[101] bg-white shadow-2xl">
+          <div className="card w-full max-w-lg p-6 my-auto flex flex-col max-h-[90vh] relative z-[101] !bg-white shadow-2xl" style={{ backdropFilter: "none" }}>
             {aiVariants == null ? (
               <>
                 <h2 className="text-lg font-semibold text-slate-900">
@@ -401,7 +401,7 @@ export function SendReminderButton({ invoiceId, disabled, className, label }: Pr
           role="dialog"
           aria-modal="true"
         >
-          <div className="card w-full max-w-md p-6">
+          <div className="card w-full max-w-md p-6 !bg-white shadow-2xl" style={{ backdropFilter: "none" }}>
             <h2 className="text-lg font-semibold text-slate-900">Fill in placeholders</h2>
             <p className="mt-1 text-sm text-slate-600">
               Review or edit AI suggestions below, then send. You can accept all or change any value.

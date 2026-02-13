@@ -25,7 +25,7 @@ export function ConfirmButton({ formAction, confirmText, className, children }: 
           role="dialog"
           aria-modal="true"
         >
-          <div className="card w-full max-w-md p-6">
+          <div className="card w-full max-w-md p-6 !bg-white shadow-2xl" style={{ backdropFilter: "none" }}>
             <div className="space-y-2">
               <h2 className="text-lg font-semibold text-slate-900">Confirm action</h2>
               <p className="text-sm text-slate-600">{confirmText}</p>

@@ -25,11 +25,7 @@ export type CompanyInfo = {
   senderName?: string;
 };
 
-/**
- * Generates a PDF buffer for the given invoice. Returns a Promise so we wait for
- * the stream to finish; both reminder send (invoice page) and run reminders use
- * this, so the same PDF is attached for a given invoice in both flows.
- */
+
 export function generateInvoicePdf(
   invoice: InvoiceData,
   companyInfo: CompanyInfo = {}

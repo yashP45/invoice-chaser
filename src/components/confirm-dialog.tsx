@@ -42,7 +42,7 @@ export function ConfirmDialog({
           role="dialog"
           aria-modal="true"
         >
-          <div className="card w-full max-w-md p-6">
+          <div className="card w-full max-w-md p-6 !bg-white shadow-2xl" style={{ backdropFilter: "none" }}>
             <div className="space-y-2">
               <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
               {description && (
