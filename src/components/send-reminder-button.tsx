@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast-provider";
+import { TokenTemplateFields } from "@/components/token-template-fields";
 
 type Props = {
   invoiceId: string;
@@ -18,27 +19,51 @@ type NeedsInputState = {
   invoice_id: string;
 };
 
+type Variant = { subject: string; body: string };
+
 export function SendReminderButton({ invoiceId, disabled, className, label }: Props) {
   const { addToast } = useToast();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [needsInput, setNeedsInput] = useState<NeedsInputState | null>(null);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [choiceModalOpen, setChoiceModalOpen] = useState(false);
+  const [aiVariants, setAiVariants] = useState<Variant[] | null>(null);
+  const [generatingVariants, setGeneratingVariants] = useState(false);
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState<number | null>(null);
+  const [pendingTemplate, setPendingTemplate] = useState<
+    { subject: string; body: string } | null
+  >(null);
 
-  const handleSend = async (tokenOverrides?: Record<string, string>) => {
+  const handleSend = async (
+    tokenOverrides?: Record<string, string>,
+    subjectTemplate?: string,
+    bodyTemplate?: string
+  ) => {
     if (disabled || loading) return;
     setLoading(true);
     setNeedsInput(null);
+    setChoiceModalOpen(false);
+    setAiVariants(null);
+    setSelectedVariantIndex(null);
+    if (subjectTemplate != null && bodyTemplate != null) {
+      setPendingTemplate({ subject: subjectTemplate, body: bodyTemplate });
+    } else {
+      setPendingTemplate(null);
+    }
     try {
+      const payload: Record<string, unknown> = { invoice_id: invoiceId };
+      if (tokenOverrides && Object.keys(tokenOverrides).length > 0) {
+        payload.token_overrides = tokenOverrides;
+      }
+      const sub = subjectTemplate ?? pendingTemplate?.subject;
+      const bod = bodyTemplate ?? pendingTemplate?.body;
+      if (sub) payload.subject_template = sub;
+      if (bod) payload.body_template = bod;
       const response = await fetch("/api/reminders/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          invoice_id: invoiceId,
-          ...(tokenOverrides && Object.keys(tokenOverrides).length > 0
-            ? { token_overrides: tokenOverrides }
-            : {})
-        })
+        body: JSON.stringify(payload)
       });
       const data = await response.json();
       if (!response.ok) {
@@ -65,6 +90,8 @@ export function SendReminderButton({ invoiceId, disabled, className, label }: Pr
         return;
       }
 
+      setPendingTemplate(null);
+
       if (data.skipped) {
         addToast({
           title: "Reminder skipped",
@@ -78,6 +105,7 @@ export function SendReminderButton({ invoiceId, disabled, className, label }: Pr
           variant: "success"
         });
       }
+      setPendingTemplate(null);
       router.refresh();
     } catch (error) {
       addToast({
@@ -110,10 +138,18 @@ export function SendReminderButton({ invoiceId, disabled, className, label }: Pr
     setLoading(true);
     setNeedsInput(null);
     try {
+      const payload: Record<string, unknown> = {
+        invoice_id: invoiceId,
+        token_overrides: trimmed
+      };
+      if (pendingTemplate) {
+        payload.subject_template = pendingTemplate.subject;
+        payload.body_template = pendingTemplate.body;
+      }
       const response = await fetch("/api/reminders/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoice_id: invoiceId, token_overrides: trimmed })
+        body: JSON.stringify(payload)
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to send.");
@@ -152,16 +188,212 @@ export function SendReminderButton({ invoiceId, disabled, className, label }: Pr
     }
   };
 
+  const openChoiceModal = () => {
+    if (disabled || loading) return;
+    setChoiceModalOpen(true);
+    setAiVariants(null);
+    setSelectedVariantIndex(null);
+  };
+
+  const generateAiVariants = async () => {
+    setGeneratingVariants(true);
+    try {
+      const res = await fetch("/api/reminders/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoice_id: invoiceId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate variants");
+      setAiVariants(data.variants || []);
+      setSelectedVariantIndex(0);
+    } catch (err) {
+      addToast({
+        title: "AI variants failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "error"
+      });
+    } finally {
+      setGeneratingVariants(false);
+    }
+  };
+
+  const sendWithSelectedVariant = () => {
+    if (aiVariants == null || selectedVariantIndex == null) return;
+    const v = aiVariants[selectedVariantIndex];
+    if (!v) return;
+    handleSend(undefined, v.subject, v.body);
+  };
+
+  useEffect(() => {
+    if (choiceModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [choiceModalOpen]);
+
   return (
     <>
       <button
         className={className || "button-secondary"}
         type="button"
-        onClick={() => handleSend()}
+        onClick={openChoiceModal}
         disabled={loading || disabled}
       >
         {loading ? "Sending..." : label || "Send reminder"}
       </button>
+
+      {choiceModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setChoiceModalOpen(false);
+              setAiVariants(null);
+              setSelectedVariantIndex(null);
+            }
+          }}
+        >
+          <div className="card w-full max-w-lg p-6 my-auto flex flex-col max-h-[90vh] relative z-[101] bg-white shadow-2xl">
+            {aiVariants == null ? (
+              <>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Send reminder
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Send with your default template or generate AI variants for this
+                  invoice.
+                </p>
+                <div className="mt-6 flex flex-col gap-3">
+                  <button
+                    type="button"
+                    className="button w-full"
+                    onClick={() => {
+                      setChoiceModalOpen(false);
+                      handleSend();
+                    }}
+                    disabled={loading}
+                  >
+                    Send with default template
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary w-full"
+                    onClick={generateAiVariants}
+                    disabled={generatingVariants}
+                  >
+                    {generatingVariants ? "Generating..." : "Generate AI variants"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary w-full"
+                    onClick={() => setChoiceModalOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-lg font-semibold text-slate-900 shrink-0">
+                  Choose or edit a variant
+                </h2>
+                <p className="mt-1 text-sm text-slate-600 shrink-0">
+                  Edit subject/body and add tokens (type {`{{`} for suggestions).
+                  Then send with your chosen variant.
+                </p>
+                <div className="mt-4 space-y-4 overflow-y-auto min-h-0 flex-1 pr-1">
+                  {aiVariants.map((variant, index) => (
+                    <div
+                      key={index}
+                      className={`rounded-xl border p-4 ${
+                        selectedVariantIndex === index
+                          ? "border-slate-900 bg-slate-50/80"
+                          : "border-slate-200 bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-slate-700">
+                          Variant {index + 1}
+                        </span>
+                        <button
+                          type="button"
+                          className="button-secondary text-xs"
+                          onClick={() => setSelectedVariantIndex(index)}
+                        >
+                          {selectedVariantIndex === index ? "Selected" : "Use this"}
+                        </button>
+                      </div>
+                      <div className="mt-3">
+                        <TokenTemplateFields
+                          subject={variant.subject}
+                          body={variant.body}
+                          onSubjectChange={(s) =>
+                            setAiVariants((prev) => {
+                              if (!prev) return prev;
+                              const next = [...prev];
+                              next[index] = { ...next[index], subject: s };
+                              return next;
+                            })
+                          }
+                          onBodyChange={(b) =>
+                            setAiVariants((prev) => {
+                              if (!prev) return prev;
+                              const next = [...prev];
+                              next[index] = { ...next[index], body: b };
+                              return next;
+                            })
+                          }
+                          subjectLabel="Subject"
+                          bodyLabel="Body"
+                          bodyRows={3}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 pt-4 border-t border-slate-200 flex flex-wrap gap-2 shrink-0">
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={sendWithSelectedVariant}
+                    disabled={loading || selectedVariantIndex == null}
+                  >
+                    {loading ? "Sending..." : "Send with selected variant"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={() => {
+                      setAiVariants(null);
+                      setSelectedVariantIndex(null);
+                    }}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={() => {
+                      setChoiceModalOpen(false);
+                      setAiVariants(null);
+                      setSelectedVariantIndex(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {needsInput && needsInput.missing_tokens.length > 0 && (
         <div

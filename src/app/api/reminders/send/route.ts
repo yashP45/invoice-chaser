@@ -10,6 +10,14 @@ import { generateInvoicePdf } from "@/lib/pdf/generate-invoice-pdf";
 import { extractTokens } from "@/lib/email/template-schema";
 import { resolveTokensBatch, isAutoFillConfidence } from "@/lib/email/resolve-token-with-ai";
 
+/** Map common custom token names to built-in keys so they are auto-filled without modal. */
+const CUSTOM_TOKEN_ALIASES: Record<string, string> = {
+  invoice_amount: "amount",
+  invoice_date: "due_date",
+  total: "amount",
+  invoice_total: "amount"
+};
+
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
@@ -28,7 +36,12 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { invoice_id?: string; token_overrides?: Record<string, string> } = {};
+  let body: {
+    invoice_id?: string;
+    token_overrides?: Record<string, string>;
+    subject_template?: string;
+    body_template?: string;
+  } = {};
   try {
     body = await request.json();
   } catch {
@@ -92,7 +105,7 @@ export async function POST(request: Request) {
 
   const { data: settings } = await admin
     .from("users")
-    .select("company_name, sender_name, reply_to, reminder_subject, reminder_body, custom_template_fields")
+    .select("company_name, sender_name, reply_to, reminder_subject, reminder_body")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -108,12 +121,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Client email missing" }, { status: 400 });
   }
 
-  const subjectTemplate = settings?.reminder_subject || DEFAULT_SUBJECT;
-  const bodyTemplate = settings?.reminder_body || DEFAULT_BODY;
+  const subjectTemplate =
+    body.subject_template ?? settings?.reminder_subject ?? DEFAULT_SUBJECT;
+  const bodyTemplate =
+    body.body_template ?? settings?.reminder_body ?? DEFAULT_BODY;
   const allTokenKeys = [
     ...new Set([...extractTokens(subjectTemplate), ...extractTokens(bodyTemplate)])
   ];
-  const builtinSet = new Set(BUILTIN_TOKEN_KEYS);
+  const builtinSet = new Set<string>(BUILTIN_TOKEN_KEYS);
   const customTokenKeys = allTokenKeys.filter((k) => !builtinSet.has(k));
 
   const builtinData: Record<string, string | number> = {
@@ -125,7 +140,6 @@ export async function POST(request: Request) {
     sender_name: senderName,
     company_name: companyName
   };
-
   const { data: lineItems } = await admin
     .from("invoice_line_items")
     .select("description, quantity, unit_price, line_total")
@@ -134,6 +148,13 @@ export async function POST(request: Request) {
 
   const hasOverrides = Object.keys(token_overrides).length > 0;
   const customValues: Record<string, string> = {};
+
+  for (const key of customTokenKeys) {
+    const builtinKey = CUSTOM_TOKEN_ALIASES[key];
+    if (builtinKey && builtinData[builtinKey] !== undefined && builtinData[builtinKey] !== null) {
+      customValues[key] = String(builtinData[builtinKey]);
+    }
+  }
 
   if (hasOverrides) {
     for (const key of customTokenKeys) {
@@ -156,55 +177,58 @@ export async function POST(request: Request) {
       );
     }
   } else {
-    const invoiceDataForAi = {
-      invoice_number: invoice.invoice_number,
-      amount: Number(invoice.amount),
-      currency: invoice.currency ?? undefined,
-      due_date: invoice.due_date ?? undefined,
-      issue_date: invoice.issue_date ?? undefined,
-      payment_terms: invoice.payment_terms ?? undefined,
-      bill_to_address: invoice.bill_to_address ?? undefined,
-      client_name: client?.name ?? undefined,
-      client_email: client?.email ?? undefined,
-      line_items: lineItems?.map((item) => ({
-        description: item.description ?? undefined,
-        quantity: item.quantity ?? undefined,
-        unit_price: item.unit_price ?? undefined,
-        line_total: item.line_total ?? undefined
-      }))
-    };
+    const customTokenKeysToResolve = customTokenKeys.filter((k) => !(k in customValues));
+    if (customTokenKeysToResolve.length > 0) {
+      const invoiceDataForAi = {
+        invoice_number: invoice.invoice_number,
+        amount: Number(invoice.amount),
+        currency: invoice.currency ?? undefined,
+        due_date: invoice.due_date ?? undefined,
+        issue_date: invoice.issue_date ?? undefined,
+        payment_terms: invoice.payment_terms ?? undefined,
+        bill_to_address: invoice.bill_to_address ?? undefined,
+        client_name: client?.name ?? undefined,
+        client_email: client?.email ?? undefined,
+        line_items: lineItems?.map((item) => ({
+          description: item.description ?? undefined,
+          quantity: item.quantity ?? undefined,
+          unit_price: item.unit_price ?? undefined,
+          line_total: item.line_total ?? undefined
+        }))
+      };
 
-    const batchResults = await resolveTokensBatch(customTokenKeys, invoiceDataForAi);
-    const needsReview: string[] = [];
-    const aiSuggestions: Record<string, string> = {};
-    const tokenConfidence: Record<string, number> = {};
+      const batchResults = await resolveTokensBatch(customTokenKeysToResolve, invoiceDataForAi);
+      const needsReview: string[] = [];
+      const aiSuggestions: Record<string, string> = {};
+      const tokenConfidence: Record<string, number> = {};
 
-    for (const r of batchResults) {
-      tokenConfidence[r.key] = r.confidence;
-      if (isAutoFillConfidence(r.confidence) && r.value) {
-        customValues[r.key] = r.value;
-      } else {
-        needsReview.push(r.key);
-        if (r.value) aiSuggestions[r.key] = r.value;
+      for (const r of batchResults) {
+        tokenConfidence[r.key] = r.confidence;
+        if (isAutoFillConfidence(r.confidence) && r.value) {
+          customValues[r.key] = r.value;
+        } else {
+          needsReview.push(r.key);
+          if (r.value) aiSuggestions[r.key] = r.value;
+        }
       }
-    }
 
-    const stillMissing = needsReview.filter((k) => !customValues[k]);
-    if (stillMissing.length > 0) {
-      return NextResponse.json(
-        {
-          needs_input: true,
-          missing_tokens: stillMissing,
-          ai_suggestions: Object.fromEntries(
-            customTokenKeys.map((k) => [k, aiSuggestions[k] ?? null])
-          ),
-          token_confidence: Object.fromEntries(
-            customTokenKeys.map((k) => [k, tokenConfidence[k] ?? 0])
-          ),
-          invoice_id: invoice.id
-        },
-        { status: 200 }
-      );
+      const stillMissing = needsReview.filter((k) => !customValues[k]);
+      if (stillMissing.length > 0) {
+        return NextResponse.json(
+          {
+            needs_input: true,
+            missing_tokens: stillMissing,
+            ai_suggestions: Object.fromEntries(
+              customTokenKeys.map((k) => [k, aiSuggestions[k] ?? null])
+            ),
+            token_confidence: Object.fromEntries(
+              customTokenKeys.map((k) => [k, tokenConfidence[k] ?? 0])
+            ),
+            invoice_id: invoice.id
+          },
+          { status: 200 }
+        );
+      }
     }
   }
 

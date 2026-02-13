@@ -14,7 +14,7 @@ export default async function SettingsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: settings } = await supabase
     .from("users")
-    .select("company_name, sender_name, reply_to, reminder_subject, reminder_body, custom_template_fields")
+    .select("company_name, sender_name, reply_to, reminder_subject, reminder_body")
     .eq("id", user.id)
     .maybeSingle();
 

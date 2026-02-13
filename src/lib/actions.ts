@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
-import { CustomFieldSchema, validateTemplate } from "@/lib/email/template-schema";
+import { validateTemplate } from "@/lib/email/template-schema";
 import { BUILTIN_TOKEN_KEYS } from "@/lib/email/templates";
 
 export async function updateInvoiceStatus(formData: FormData) {
@@ -62,37 +62,35 @@ export async function createClient(formData: FormData) {
   revalidatePath("/clients");
 }
 
-export async function updateUserSettings(formData: FormData) {
+export async function updateUserSettings(
+  formData: FormData
+): Promise<void | { error: string }> {
   const user = await getUser();
   if (!user) return;
 
   const companyName = String(formData.get("company_name") || "");
   const senderName = String(formData.get("sender_name") || "");
   const replyTo = String(formData.get("reply_to") || "");
-  const reminderSubject = String(formData.get("reminder_subject") || "");
-  const reminderBody = String(formData.get("reminder_body") || "");
 
-  // Parse and validate custom template fields
-  let customFields: unknown[] = [];
-  const customFieldsJson = formData.get("custom_template_fields");
-  if (customFieldsJson && typeof customFieldsJson === "string") {
+  let reminderSubject: string;
+  let reminderBody: string;
+  const templateJson = formData.get("reminder_template");
+  if (templateJson && typeof templateJson === "string" && templateJson.trim() !== "") {
     try {
-      const parsed = JSON.parse(customFieldsJson);
-      const validationResult = CustomFieldSchema.array().safeParse(parsed);
-      if (validationResult.success) {
-        customFields = validationResult.data;
-      }
-      // If validation fails, silently use empty array (fields will be ignored)
+      const parsed = JSON.parse(templateJson) as { subject?: string; body?: string };
+      reminderSubject = typeof parsed.subject === "string" ? parsed.subject : "";
+      reminderBody = typeof parsed.body === "string" ? parsed.body : "";
     } catch {
-      // Invalid JSON, use empty array
+      reminderSubject = String(formData.get("reminder_subject") || "");
+      reminderBody = String(formData.get("reminder_body") || "");
     }
+  } else {
+    reminderSubject = String(formData.get("reminder_subject") || "");
+    reminderBody = String(formData.get("reminder_body") || "");
   }
 
-  // Validate templates against available tokens
-  const unknownTokensInSubject = validateTemplate(reminderSubject, BUILTIN_TOKEN_KEYS, customFields as any);
-  const unknownTokensInBody = validateTemplate(reminderBody, BUILTIN_TOKEN_KEYS, customFields as any);
-
-  // Log warnings for unknown tokens (but don't block save)
+  const unknownTokensInSubject = validateTemplate(reminderSubject, BUILTIN_TOKEN_KEYS, []);
+  const unknownTokensInBody = validateTemplate(reminderBody, BUILTIN_TOKEN_KEYS, []);
   if (unknownTokensInSubject.length > 0 || unknownTokensInBody.length > 0) {
     console.warn("Unknown template tokens detected:", {
       subject: unknownTokensInSubject,
@@ -105,12 +103,16 @@ export async function updateUserSettings(formData: FormData) {
     company_name: companyName || null,
     sender_name: senderName || null,
     reply_to: replyTo || null,
-    custom_template_fields: customFields.length > 0 ? customFields : null
+    reminder_subject: reminderSubject,
+    reminder_body: reminderBody
   };
-  if (formData.has("reminder_subject")) updatePayload.reminder_subject = reminderSubject;
-  if (formData.has("reminder_body")) updatePayload.reminder_body = reminderBody;
 
-  await admin.from("users").update(updatePayload).eq("id", user.id);
+  const { error } = await admin.from("users").update(updatePayload).eq("id", user.id);
+
+  if (error) {
+    console.error("updateUserSettings failed:", error.message);
+    return { error: error.message };
+  }
 
   revalidatePath("/settings");
 }

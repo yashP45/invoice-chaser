@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "test": "playwright test",
     "test:e2e": "playwright test",
-    "test:ui": "playwright test --ui"
+    "test:ui": "playwright test --ui",
+    "generate-sample-pdf": "node scripts/generate-sample-invoice-pdf.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

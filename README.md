@@ -33,7 +33,8 @@ Use these to quickly test CSV import and AI invoice parsing.
 - `test-data/sample_aliases.csv`
 - `test-data/sample_line_items.csv`
 
-**PDF samples (AI extraction)**
+**PDF samples (AI extraction and reminder testing)**
+- `test-data/sample-invoice.pdf` — generated sample (run `npm run generate-sample-pdf` to regenerate). Use this to test: upload → parse → create invoice → send reminder (with tokens and generated PDF attachment).
 - `test-data/invoice_sample_1.pdf`
 - `test-data/invoice_sample_2.pdf`
 

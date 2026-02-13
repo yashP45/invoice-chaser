@@ -51,7 +51,7 @@ export async function POST(request: Request) {
   };
 
   const allTokenKeys = [...new Set([...extractTokens(subject), ...extractTokens(bodyText)])];
-  const builtinSet = new Set(BUILTIN_TOKEN_KEYS);
+  const builtinSet = new Set<string>(BUILTIN_TOKEN_KEYS);
   const customTokenKeys = allTokenKeys.filter((k) => !builtinSet.has(k));
 
   let customValues: Record<string, string> = {};

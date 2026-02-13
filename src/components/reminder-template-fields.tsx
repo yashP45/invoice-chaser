@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { listTokens } from "@/lib/email/template-schema";
-import { BUILTIN_FIELDS, BUILTIN_TOKEN_KEYS, renderTemplate } from "@/lib/email/templates";
+import { BUILTIN_FIELDS, BUILTIN_TOKEN_KEYS, SUGGESTED_CUSTOM_FIELDS, renderTemplate } from "@/lib/email/templates";
 import type { ReactNode } from "react";
 
 export type ReminderTemplateFieldsRef = {
@@ -154,13 +154,22 @@ export const ReminderTemplateFields = forwardRef<ReminderTemplateFieldsRef, Prop
     description: f.description,
     isCustom: false
   }));
-  const customOptions = custom.map((k) => ({
-    key: k,
-    label: k.replace(/_/g, " "),
-    description: "AI will fill",
+  const suggestedCustomOptions = SUGGESTED_CUSTOM_FIELDS.map((f) => ({
+    key: f.key,
+    label: f.key.replace(/_/g, " "),
+    description: f.description,
     isCustom: true
   }));
-  const autocompleteOptions = [...builtinOptions, ...customOptions];
+  const suggestedKeys = new Set<string>(SUGGESTED_CUSTOM_FIELDS.map((f) => f.key));
+  const customOptions = custom
+    .filter((k) => !suggestedKeys.has(k))
+    .map((k) => ({
+      key: k,
+      label: k.replace(/_/g, " "),
+      description: "Read from invoice (AI)",
+      isCustom: true
+    }));
+  const autocompleteOptions = [...builtinOptions, ...suggestedCustomOptions, ...customOptions];
 
   const checkTrigger = useCallback(
     (value: string, field: AutocompleteField) => {

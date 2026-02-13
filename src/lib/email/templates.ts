@@ -43,6 +43,20 @@ export const BUILTIN_FIELDS = [
 
 export const BUILTIN_TOKEN_KEYS = BUILTIN_FIELDS.map((field) => field.key);
 
+/**
+ * Suggested custom tokens: not built-in, but AI will try to read them from the invoice
+ * (e.g. line items, payment terms, references). Users can also type any {{placeholder}}.
+ */
+export const SUGGESTED_CUSTOM_FIELDS = [
+  { key: "project_name", label: "Project Name", description: "Read from invoice (AI)" },
+  { key: "po_number", label: "PO Number", description: "Read from invoice (AI)" },
+  { key: "reference", label: "Reference", description: "Read from invoice (AI)" },
+  { key: "contract_id", label: "Contract ID", description: "Read from invoice (AI)" },
+  { key: "first_line_item", label: "First line item", description: "Read from invoice (AI)" },
+  { key: "service_description", label: "Service description", description: "Read from invoice (AI)" },
+  { key: "billing_period", label: "Billing period", description: "Read from invoice (AI)" }
+] as const;
+
 import { normalizeTokenKey } from "./template-schema";
 
 const TOKEN_REGEX = /\{\{\s*([^}]+)\s*\}\}/g;

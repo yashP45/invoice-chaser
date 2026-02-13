@@ -10,6 +10,13 @@ import { generateInvoicePdf } from "@/lib/pdf/generate-invoice-pdf";
 import { extractTokens } from "@/lib/email/template-schema";
 import { resolveTokensBatch, isLowConfidence } from "@/lib/email/resolve-token-with-ai";
 
+const CUSTOM_TOKEN_ALIASES: Record<string, string> = {
+  invoice_amount: "amount",
+  invoice_date: "due_date",
+  total: "amount",
+  invoice_total: "amount"
+};
+
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
@@ -33,7 +40,11 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { subject_template?: string; body_template?: string } = {};
+  let body: {
+    subject_template?: string;
+    body_template?: string;
+    overrides_by_invoice?: Record<string, Record<string, string>>;
+  } = {};
   try {
     if (request.headers.get("content-type")?.includes("application/json")) {
       body = await request.json();
@@ -55,7 +66,7 @@ export async function POST(request: Request) {
   }
 
   if (!invoices || invoices.length === 0) {
-    return NextResponse.json({ sent: 0, failed: 0 });
+    return NextResponse.json({ sent: 0, failed: 0, skipped: 0 });
   }
 
   // Batch fetch line items for all invoices
@@ -81,7 +92,7 @@ export async function POST(request: Request) {
 
   const { data: settings } = await admin
     .from("users")
-    .select("company_name, sender_name, reply_to, reminder_subject, reminder_body, custom_template_fields")
+    .select("company_name, sender_name, reply_to, reminder_subject, reminder_body")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -97,7 +108,7 @@ export async function POST(request: Request) {
   const allTokenKeys = [
     ...new Set([...extractTokens(subjectTemplate), ...extractTokens(bodyTemplate)])
   ];
-  const builtinSet = new Set(BUILTIN_TOKEN_KEYS);
+  const builtinSet = new Set<string>(BUILTIN_TOKEN_KEYS);
   const customTokenKeys = allTokenKeys.filter((k) => !builtinSet.has(k));
 
   const { data: reminders, error: reminderError } = await admin
@@ -116,7 +127,9 @@ export async function POST(request: Request) {
 
   let sent = 0;
   let failed = 0;
+  let skipped = 0;
   const failures: { invoice_id: string; error: string }[] = [];
+  const skipped_invoices: { invoice_id: string; reason: string }[] = [];
 
   for (const invoice of invoices) {
     if (!(invoice.status === "open" || invoice.status === "partial")) continue;
@@ -144,33 +157,53 @@ export async function POST(request: Request) {
         company_name: companyName
       };
 
-      let customValues: Record<string, string> = {};
+      const customValues: Record<string, string> = {};
+      for (const key of customTokenKeys) {
+        const builtinKey = CUSTOM_TOKEN_ALIASES[key];
+        if (builtinKey && builtinData[builtinKey] !== undefined && builtinData[builtinKey] !== null) {
+          customValues[key] = String(builtinData[builtinKey]);
+        }
+      }
       if (customTokenKeys.length > 0) {
-        const lineItems = lineItemsByInvoice.get(invoice.id) || [];
-        const invoiceDataForAi = {
-          invoice_number: invoice.invoice_number,
-          amount: Number(invoice.amount),
-          currency: invoice.currency ?? undefined,
-          due_date: invoice.due_date ?? undefined,
-          issue_date: invoice.issue_date ?? undefined,
-          payment_terms: invoice.payment_terms ?? undefined,
-          bill_to_address: invoice.bill_to_address ?? undefined,
-          client_name: client?.name ?? undefined,
-          client_email: client?.email ?? undefined,
-          line_items: lineItems.map((item) => ({
-            description: item.description ?? undefined,
-            quantity: item.quantity ?? undefined,
-            unit_price: item.unit_price ?? undefined,
-            line_total: item.line_total ?? undefined
-          }))
-        };
-        const batchResults = await resolveTokensBatch(customTokenKeys, invoiceDataForAi);
-        customValues = Object.fromEntries(
-          batchResults.map((r) => [
-            r.key,
-            isLowConfidence(r.confidence) ? "" : (r.value || "")
-          ])
+        const keysToResolve = customTokenKeys.filter((k) => !(k in customValues));
+        if (keysToResolve.length > 0) {
+          const lineItems = lineItemsByInvoice.get(invoice.id) || [];
+          const invoiceDataForAi = {
+            invoice_number: invoice.invoice_number,
+            amount: Number(invoice.amount),
+            currency: invoice.currency ?? undefined,
+            due_date: invoice.due_date ?? undefined,
+            issue_date: invoice.issue_date ?? undefined,
+            payment_terms: invoice.payment_terms ?? undefined,
+            bill_to_address: invoice.bill_to_address ?? undefined,
+            client_name: client?.name ?? undefined,
+            client_email: client?.email ?? undefined,
+            line_items: lineItems.map((item) => ({
+              description: item.description ?? undefined,
+              quantity: item.quantity ?? undefined,
+              unit_price: item.unit_price ?? undefined,
+              line_total: item.line_total ?? undefined
+            }))
+          };
+          const batchResults = await resolveTokensBatch(keysToResolve, invoiceDataForAi);
+          for (const r of batchResults) {
+            customValues[r.key] = isLowConfidence(r.confidence) ? "" : (r.value || "");
+          }
+        }
+        const overrides = body.overrides_by_invoice?.[invoice.id] ?? {};
+        for (const [key, value] of Object.entries(overrides)) {
+          if (customTokenKeys.includes(key) && value != null && String(value).trim() !== "") {
+            customValues[key] = String(value).trim();
+          }
+        }
+        const hasEmptyCustom = customTokenKeys.some(
+          (k) => !customValues[k] || String(customValues[k]).trim() === ""
         );
+        if (hasEmptyCustom) {
+          skipped += 1;
+          skipped_invoices.push({ invoice_id: invoice.id, reason: "missing placeholders" });
+          continue;
+        }
       }
 
       const templateData: Record<string, string | number> = {
@@ -277,5 +310,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ sent, failed, failures });
+  return NextResponse.json({ sent, failed, skipped, failures, skipped_invoices });
 }

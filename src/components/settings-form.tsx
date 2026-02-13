@@ -2,9 +2,10 @@
 
 import { useRef, useTransition } from "react";
 import { ReminderTemplateFields, type ReminderTemplateFieldsRef } from "@/components/reminder-template-fields";
+import { useToast } from "@/components/toast-provider";
 
 type SettingsFormProps = {
-  action: (formData: FormData) => Promise<void>;
+  action: (formData: FormData) => Promise<void | { error?: string }>;
   defaultSubject: string;
   defaultBody: string;
   companyName?: string;
@@ -30,6 +31,7 @@ export function SettingsForm({
 }: SettingsFormProps) {
   const templateRef = useRef<ReminderTemplateFieldsRef>(null);
   const [isPending, startTransition] = useTransition();
+  const { addToast } = useToast();
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -37,9 +39,23 @@ export function SettingsForm({
     const formData = new FormData(form);
     const subject = templateRef.current?.getSubject() ?? "";
     const body = templateRef.current?.getBody() ?? "";
-    formData.set("reminder_subject", subject);
-    formData.set("reminder_body", body);
-    startTransition(() => action(formData));
+    formData.set("reminder_template", JSON.stringify({ subject, body }));
+    startTransition(async () => {
+      const result = await action(formData);
+      if (result?.error) {
+        addToast({
+          title: "Settings could not be saved",
+          description: result.error,
+          variant: "error"
+        });
+      } else {
+        addToast({
+          title: "Settings saved",
+          description: "Your reminder template and preferences were updated.",
+          variant: "success"
+        });
+      }
+    });
   };
 
   return (

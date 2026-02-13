@@ -3,6 +3,13 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
 import { daysOverdue, formatDate } from "@/lib/utils/date";
 import { Landing } from "@/components/landing";
+import { reminderStage } from "@/lib/reminders";
+import {
+  getSuggestedAction,
+  getReminderEffectiveness,
+  getEffectivenessWindowStart
+} from "@/lib/insights/dashboard";
+import { DashboardSummary } from "@/components/dashboard-summary";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +23,7 @@ export default async function DashboardPage() {
   const { data: invoices } = await supabase
     .from("invoices")
     .select(
-      "id, invoice_number, amount, currency, due_date, status, clients(name)"
+      "id, invoice_number, amount, currency, due_date, status, last_reminder_sent_at, paid_at, clients(name, email)"
     )
     .eq("user_id", user.id);
 
@@ -34,11 +41,67 @@ export default async function DashboardPage() {
   startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
   startOfWeek.setHours(0, 0, 0, 0);
 
-  const { data: reminders } = await supabase
+  const { data: allReminders } = await supabase
     .from("reminders")
-    .select("id, sent_at")
+    .select("id, sent_at, invoice_id, reminder_stage")
+    .eq("user_id", user.id);
+
+  const reminders = (allReminders || []).filter(
+    (r) => new Date(r.sent_at) >= startOfWeek
+  );
+
+  const effectivenessStart = getEffectivenessWindowStart();
+  const { data: remindersLast30 } = await supabase
+    .from("reminders")
+    .select("invoice_id, sent_at")
     .eq("user_id", user.id)
-    .gte("sent_at", startOfWeek.toISOString());
+    .gte("sent_at", effectivenessStart.toISOString());
+
+  const suggestedAction = getSuggestedAction(
+    invoices || [],
+    allReminders || []
+  );
+  const invoicesById = new Map(
+    (invoices || []).map((inv) => [
+      inv.id,
+      { id: inv.id, status: inv.status, paid_at: inv.paid_at ?? null }
+    ])
+  );
+  const effectiveness = getReminderEffectiveness(
+    remindersLast30 || [],
+    invoicesById
+  );
+
+  const sentMap = new Set(
+    (allReminders || []).map((r) => `${r.invoice_id}:${r.reminder_stage}`)
+  );
+  const eligibleCount = overdueInvoices.filter((inv) => {
+    const overdue = daysOverdue(inv.due_date);
+    const stage = reminderStage(overdue);
+    if (stage === 0) return false;
+    const client = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
+    return !sentMap.has(`${inv.id}:${stage}`) && !!client?.email;
+  }).length;
+  const topOverdueForSummary = overdueInvoices.slice(0, 5).map((inv) => {
+    const client = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
+    return {
+      invoice_number: inv.invoice_number,
+      client_name: client?.name ?? "—",
+      days_overdue: daysOverdue(inv.due_date),
+      amount: Number(inv.amount || 0),
+      currency: inv.currency || "USD"
+    };
+  });
+  const summaryPayload = {
+    overdueCount: overdueInvoices.length,
+    overdueAmount,
+    remindersThisWeek: reminders.length,
+    eligibleForReminder: eligibleCount,
+    suggestedActionText: suggestedAction.suggestedAction,
+    effectivenessLabel: effectiveness.label,
+    topOverdue: topOverdueForSummary,
+    expectedInflow: overdueAmount
+  };
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -54,7 +117,9 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:gap-5 md:grid-cols-3">
+      <DashboardSummary payload={summaryPayload} />
+
+      <section className="grid gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-4">
         <div className="card p-4 sm:p-5">
           <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">
             Overdue invoices
@@ -75,8 +140,15 @@ export default async function DashboardPage() {
           <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">
             Reminders sent
           </p>
-          <p className="text-2xl sm:text-3xl font-semibold mb-1">{reminders?.length || 0}</p>
+          <p className="text-2xl sm:text-3xl font-semibold mb-1">{reminders.length}</p>
           <p className="text-xs text-slate-500">Sent since Sunday.</p>
+        </div>
+        <div className="card p-4 sm:p-5">
+          <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">
+            Reminder effectiveness
+          </p>
+          <p className="text-sm font-medium text-slate-900 mb-1">{effectiveness.label}</p>
+          <p className="text-xs text-slate-500">Last 30 days.</p>
         </div>
       </section>
 
@@ -100,6 +172,18 @@ export default async function DashboardPage() {
             </Link>
           </div>
         </div>
+        {suggestedAction.suggestedAction && (
+          <div className="mt-4 pt-4 border-t border-slate-200">
+            <p className="text-sm font-medium text-slate-700 mb-2">Suggested</p>
+            <p className="text-sm text-slate-600 mb-2">{suggestedAction.suggestedAction}</p>
+            <Link
+              className="button-secondary text-xs sm:text-sm"
+              href={suggestedAction.invoiceId ? "/invoices" : "/reminders"}
+            >
+              {suggestedAction.invoiceId ? "Send reminder" : "Run reminders"}
+            </Link>
+          </div>
+        )}
       </section>
 
       <section className="card p-4 sm:p-6">
